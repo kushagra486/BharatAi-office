@@ -55,10 +55,29 @@ export interface Escalation {
 
 // --- WebSocket event envelope -------------------------------------------
 
+export interface BriefRecord {
+  brief: string;
+  etaMinutes: number | null;
+  status: string;
+}
+
+export interface HiveSnapshot {
+  agents: Agent[];
+  tasks: Task[];
+  messages: HiveMessage[];
+  escalations: Escalation[];
+  brief: BriefRecord | null;
+}
+
 export type HiveEvent =
+  | { type: 'snapshot'; payload: HiveSnapshot }
   | { type: 'task:update'; payload: Task }
   | { type: 'message:new'; payload: HiveMessage }
   | { type: 'escalation:new'; payload: Escalation }
   | { type: 'escalation:resolved'; payload: Escalation }
   | { type: 'memory:new'; payload: MemoryEntry }
-  | { type: 'brief:update'; payload: { brief: string; etaMinutes: number | null; status: string } };
+  | { type: 'brief:update'; payload: BriefRecord }
+  // Employee side panel terminal feed — sourced from PtyManager's
+  // ptyEvents, not the Hive tables, but broadcast on the same socket.
+  | { type: 'pty:output'; payload: { agentId: string; taskId: string; chunk: string } }
+  | { type: 'pty:exit'; payload: { agentId: string; taskId: string; exitCode: number } };

@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { db } from './db';
 import type {
   Agent,
+  BriefRecord,
   Escalation,
   EscalationResolution,
   HiveEvent,
@@ -220,12 +221,6 @@ export function listEscalations(filter?: { resolution?: EscalationResolution }):
 }
 
 // --- brief (current project brief + status, drives the Brief Strip) --------
-
-export interface BriefRecord {
-  brief: string;
-  etaMinutes: number | null;
-  status: string;
-}
 
 export function setBrief(input: { brief: string; etaMinutes?: number | null; status?: string }): BriefRecord {
   const ts = nowIso();
