@@ -1,0 +1,28 @@
+node_modules/
+.next/
+dist/
+build/
+*.log
+npm-debug.log*
+
+# env
+.env
+.env.local
+daemon/.env
+
+# hive db + runtime data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+daemon/data/
+
+# project workdir where employee agents actually work
+workdir/
+
+# os
+.DS_Store
+
+# editors
+.vscode/
+.idea/

@@ -1,0 +1,22 @@
+{
+  "name": "bharat-ai-office",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A local-first multi-agent harness that turns a single project brief into a fully staffed AI office.",
+  "workspaces": [
+    "shared",
+    "daemon",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace daemon & npm run dev --workspace frontend",
+    "dev:daemon": "npm run dev --workspace daemon",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace shared && npm run build --workspace daemon && npm run build --workspace frontend",
+    "build:shared": "npm run build --workspace shared",
+    "typecheck": "npm run typecheck --workspace shared && npm run typecheck --workspace daemon && npm run typecheck --workspace frontend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,64 @@
+// Typed mirrors of the Hive SQLite schema (see daemon/src/hive/schema.sql).
+// Shared between daemon and frontend so WebSocket payloads are type-safe end to end.
+
+export type TaskStatus = 'idle' | 'working' | 'blocked' | 'done';
+export type MessageType = 'task' | 'handoff' | 'escalation' | 'report';
+export type EscalationResolution = 'pending' | 'approved' | 'denied';
+
+export interface Agent {
+  id: string;
+  name: string;
+  role: string;
+  dept: string;
+  color: string;
+  shape: 'hex' | 'diamond' | 'circle' | 'rounded-sq' | 'octagon';
+  home_x: number;
+  home_y: number;
+}
+
+export interface Task {
+  id: string;
+  agent_id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  depends_on: string[]; // parsed from JSON column
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HiveMessage {
+  id: number;
+  from_agent: string;
+  to_agent: string;
+  type: MessageType;
+  body: string;
+  created_at: string;
+}
+
+export interface MemoryEntry {
+  id: number;
+  agent_id: string;
+  tag: string;
+  content: string;
+  created_at: string;
+}
+
+export interface Escalation {
+  id: number;
+  agent_id: string;
+  description: string;
+  resolution: EscalationResolution;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+// --- WebSocket event envelope -------------------------------------------
+
+export type HiveEvent =
+  | { type: 'task:update'; payload: Task }
+  | { type: 'message:new'; payload: HiveMessage }
+  | { type: 'escalation:new'; payload: Escalation }
+  | { type: 'escalation:resolved'; payload: Escalation }
+  | { type: 'memory:new'; payload: MemoryEntry }
+  | { type: 'brief:update'; payload: { brief: string; etaMinutes: number | null; status: string } };
