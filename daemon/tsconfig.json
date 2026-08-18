@@ -10,10 +10,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true,
-    "paths": {
-      "@bharat-ai-office/shared": ["../shared/src/index.ts"]
-    }
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src"]
 }
