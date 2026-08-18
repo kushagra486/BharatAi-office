@@ -4,6 +4,7 @@ dist/
 build/
 *.log
 npm-debug.log*
+*.tsbuildinfo
 
 # env
 .env
