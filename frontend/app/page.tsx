@@ -1,14 +1,23 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useHiveSocket } from '@/hooks/useHiveSocket';
 import { approveEscalation, denyEscalation, submitBrief } from '@/lib/daemonApi';
 import { HudBar } from '@/components/office/HudBar';
 import { BriefStrip } from '@/components/office/BriefStrip';
-import { OfficeFloor } from '@/components/office/OfficeFloor';
 import { ApprovalsDock } from '@/components/office/ApprovalsDock';
 import { MemoryRecallPanel } from '@/components/office/MemoryRecallPanel';
 import { EmployeeSidePanel } from '@/components/office/EmployeeSidePanel';
+
+// Pixel-art office floor (see /root/.claude/plans/synchronous-yawning-unicorn.md).
+// Client-only: it owns a PIXI.Application (WebGL/canvas), so it's kept out
+// of the server render even though it doesn't strictly require ssr:false
+// today (see the migration's build notes).
+const OfficeFloorPixel = dynamic(
+  () => import('@/components/office-pixel/OfficeFloorPixel').then((m) => m.OfficeFloorPixel),
+  { ssr: false }
+);
 
 const SESSION_ID = 'OFFICE-001';
 
@@ -41,7 +50,7 @@ export default function Home() {
       <BriefStrip brief={brief} onSubmitBrief={submitBrief} />
 
       <div className="flex-1 p-4">
-        <OfficeFloor agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
+        <OfficeFloorPixel agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
       </div>
 
       <div id="approvals-dock">
