@@ -145,7 +145,12 @@ class PtyManager {
     const match = entry.outputBuffer.match(ESCALATE_RE);
     if (match) {
       entry.escalated = true;
-      hive.raiseEscalation({ agentId: entry.agentId, description: match[1].trim() });
+      // Sent to Nova rather than raised directly: an employee flagging
+      // something doesn't mean it belongs on the human's Approvals Dock —
+      // Nova triages it against the hard policy first (see nova/nova.ts)
+      // and only escalates the subset that's actually spend/destructive/
+      // scope-change, resolving everything else itself.
+      hive.sendMessage({ fromAgent: entry.agentId, toAgent: 'nova', type: 'escalation', body: match[1].trim() });
     }
   }
 
@@ -170,6 +175,9 @@ class PtyManager {
 
     hive.updateTaskStatus(taskId, 'blocked');
     if (!entry.escalated) {
+      // A daemon-detected operational failure (crash, no completion
+      // signal), not a policy judgment call an employee raised — this
+      // goes straight to the human rather than through Nova's triage.
       hive.raiseEscalation({
         agentId,
         description: `Task "${taskId}" exited without a TASK_DONE marker (exit code ${exitCode}). Needs review.`,
