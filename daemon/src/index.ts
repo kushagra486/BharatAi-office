@@ -4,7 +4,7 @@ import { env } from './env';
 import './hive/db'; // initializes + migrates the Hive on import
 import * as hive from './hive/hive';
 import { ensureRepo } from './git/gitModule';
-import { decomposeBrief, startNovaLoop } from './nova/nova';
+import { applyHumanResolution, decomposeBrief, startNovaLoop } from './nova/nova';
 import { attachWebSocketServer } from './ws/server';
 
 async function main() {
@@ -32,6 +32,28 @@ async function main() {
     const tasks = await decomposeBrief(brief.trim());
     return { taskCount: tasks.length, tasks };
   });
+
+  app.get('/api/escalations', async () => hive.listEscalations());
+
+  app.post<{ Params: { id: string } }>('/api/escalations/:id/approve', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) {
+      reply.code(400);
+      return { error: 'invalid escalation id' };
+    }
+    return applyHumanResolution(id, 'approved');
+  });
+
+  app.post<{ Params: { id: string } }>('/api/escalations/:id/deny', async (request, reply) => {
+    const id = Number(request.params.id);
+    if (!Number.isInteger(id)) {
+      reply.code(400);
+      return { error: 'invalid escalation id' };
+    }
+    return applyHumanResolution(id, 'denied');
+  });
+
+  app.get<{ Querystring: { q?: string } }>('/api/memory/search', async (request) => hive.searchMemory(request.query.q ?? ''));
 
   await app.listen({ port: env.DAEMON_PORT, host: '0.0.0.0' });
 

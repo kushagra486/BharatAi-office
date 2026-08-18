@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useHiveSocket } from '@/hooks/useHiveSocket';
-import { submitBrief } from '@/lib/daemonApi';
+import { approveEscalation, denyEscalation, submitBrief } from '@/lib/daemonApi';
 import { HudBar } from '@/components/office/HudBar';
 import { BriefStrip } from '@/components/office/BriefStrip';
 import { OfficeFloor } from '@/components/office/OfficeFloor';
@@ -20,12 +20,13 @@ export default function Home() {
   const selectedAgent = useMemo(() => agents.find((a) => a.id === selectedAgentId) ?? null, [agents, selectedAgentId]);
   const pendingApprovals = useMemo(() => escalations.filter((e) => e.resolution === 'pending').length, [escalations]);
 
-  // Approve/Deny handlers are wired to real daemon endpoints in Phase 6.
+  // The resulting escalation:resolved event comes back over the socket, so
+  // no local optimistic update is needed here.
   function handleApprove(id: number) {
-    console.warn(`TODO(Phase 6): approve escalation ${id}`);
+    approveEscalation(id).catch((err) => console.error('failed to approve escalation', id, err));
   }
   function handleDeny(id: number) {
-    console.warn(`TODO(Phase 6): deny escalation ${id}`);
+    denyEscalation(id).catch((err) => console.error('failed to deny escalation', id, err));
   }
 
   return (

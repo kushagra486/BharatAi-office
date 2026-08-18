@@ -235,6 +235,45 @@ export function stopNovaLoop(): void {
   loopHandle = null;
 }
 
+// --- human resolutions from the Approvals Dock ---------------------------------
+
+// The Hive schema (PRD 5.4) doesn't link an escalation to a task id, so the
+// "blocked employee" whose work should proceed/stop is found heuristically:
+// their most recently created still-blocked task. In practice an agent has
+// at most one blocked task at a time (PtyManager only runs one task per
+// agent), so this is unambiguous outside pathological cases.
+export async function applyHumanResolution(escalationId: number, resolution: 'approved' | 'denied') {
+  const escalation = hive.resolveEscalation(escalationId, resolution);
+  const blockedTasks = hive.listTasks({ agentId: escalation.agent_id, status: 'blocked' });
+  const task = blockedTasks[blockedTasks.length - 1];
+
+  if (resolution === 'approved') {
+    hive.sendMessage({
+      fromAgent: 'nova',
+      toAgent: escalation.agent_id,
+      type: 'report',
+      body: `Approved: ${escalation.description}`,
+    });
+    // There's no live PTY stdin to unblock — each task runs as a one-shot
+    // `claude -p` process (see PtyManager). "Let the blocked employee's
+    // next input proceed" becomes: requeue the task as idle so Nova's
+    // dispatch loop spawns a fresh run of it on its next tick.
+    if (task) hive.updateTaskStatus(task.id, 'idle');
+  } else {
+    hive.sendMessage({
+      fromAgent: 'nova',
+      toAgent: escalation.agent_id,
+      type: 'report',
+      body: `Denied: ${escalation.description}`,
+    });
+    // Left 'blocked' deliberately — re-running the identical task would
+    // just re-raise the same escalation. It stays visible until a human
+    // or Nova reassigns/edits it (not automated in v1).
+  }
+
+  return escalation;
+}
+
 export function novaAgent() {
   return ROSTER.find((a) => a.id === 'nova')!;
 }
