@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+"""
+Generates the office floor's pixel-art assets from scratch — no imported
+tilesets, no stock/licensed sprite packs, no reference tracing. Every pixel
+is placed explicitly below. Run with: python3 generate-pixel-art.py
+
+Output matches frontend/components/office-pixel/ASSETS.md exactly:
+  frontend/public/office-pixel/characters.png + characters.json
+  frontend/public/office-pixel/tileset.png    + tileset.json
+
+Character frames are authored on a 16x16 logical grid in a grayscale
+palette, then nearest-neighbor upscaled 2x to the spec's 32x32. Grayscale
+is deliberate: PixiJS applies each agent's color via `.tint` (RGB multiply)
+at runtime, so near-black pixels (outline, eyes) stay dark under any tint
+while light-gray/white pixels become that agent's vivid color — the same
+texture reproduces all 11 agent colors with real shading, not just a flat
+recolor. Tiles are authored directly in the app's real design tokens
+(shared/src/tokens.ts) since they are not tinted at runtime.
+"""
+
+import json
+import os
+
+from PIL import Image
+
+OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "public", "office-pixel")
+os.makedirs(OUT_DIR, exist_ok=True)
+
+LOGICAL = 16  # design grid
+SCALE = 2  # -> 32x32 final, matching FRAME_SIZE/TILE_SIZE in coords.ts/assets.ts
+FRAME = LOGICAL * SCALE
+
+# --- grayscale character palette (tint-multiplied at runtime) --------------
+OUTLINE = (26, 26, 26, 255)  # stays near-black under any tint
+FACE = (15, 15, 15, 255)  # eyes — stays dark/legible under any tint
+SHADOW = (120, 120, 120, 255)  # -> a darker shade of the tint color
+BASE = (218, 218, 218, 255)  # -> the agent's actual color
+HIGHLIGHT = (255, 255, 255, 255)  # -> the brightest shade of the tint color
+DROP_SHADOW = (10, 10, 10, 70)  # soft grounding shadow, low alpha
+TRANSPARENT = (0, 0, 0, 0)
+
+# --- real brand tokens for tiles (not tinted — authored in final color) ----
+TOK_VOID = (6, 9, 13, 255)
+TOK_PANEL = (14, 20, 28, 255)
+TOK_PANEL_ALT = (11, 17, 24, 255)
+TOK_LINE = (29, 40, 54, 255)
+TOK_LINE_SOFT = (22, 31, 42, 255)
+TOK_DESK = (42, 52, 68, 255)
+TOK_CYAN = (47, 230, 210, 255)
+TOK_AMBER = (255, 180, 84, 255)
+TOK_AMBER_FILL = (58, 44, 20, 255)
+TOK_VIOLET = (139, 124, 246, 255)
+TOK_VIOLET_FILL = (26, 21, 48, 255)
+
+
+def new_canvas():
+    return {}  # (x, y) -> RGBA tuple, sparse — unset cells stay transparent
+
+
+def row(canvas, y, start_x, chars, mapping):
+    """Paints one row from a compact string, e.g. '.OHHHHHHSO.' where each
+    char maps to a color via `mapping` and '.' is transparent (skipped)."""
+    for i, ch in enumerate(chars):
+        if ch == ".":
+            continue
+        canvas[(start_x + i, y)] = mapping[ch]
+
+
+CHAR_MAP = {
+    "O": OUTLINE,
+    "H": HIGHLIGHT,
+    "B": BASE,
+    "S": SHADOW,
+    "F": FACE,
+    "D": DROP_SHADOW,
+}
+
+
+def base_character(eyes: str):
+    """
+    eyes: 'both' | 'none' | 'left' | 'right' — which eye pixels to paint.
+    Builds the down-facing silhouette (a small rounded-hood head over a
+    rounded body) on the 16x16 grid; direction variants reuse this shape.
+    """
+    c = new_canvas()
+    # head
+    row(c, 2, 5, "OOOOOO", CHAR_MAP)
+    row(c, 3, 4, "OHHHHHSO", CHAR_MAP)
+    row(c, 4, 3, "OHHBBBBSSO", CHAR_MAP)
+    row(c, 5, 3, "OHBBBBBSSO", CHAR_MAP)
+    row(c, 6, 3, "OHBBBBBSSO", CHAR_MAP)  # base row; eye pixels overridden below
+    if eyes in ("both", "left"):
+        c[(6, 6)] = FACE
+    if eyes in ("both", "right"):
+        c[(9, 6)] = FACE
+    row(c, 7, 3, "OHBBBBBSSO", CHAR_MAP)
+    row(c, 8, 4, "OSSSSSSO", CHAR_MAP)
+    row(c, 9, 5, "OOOOOO", CHAR_MAP)
+    # body
+    row(c, 10, 4, "OHBBBSO", CHAR_MAP)
+    row(c, 11, 3, "OHBBBBBSSO", CHAR_MAP)
+    row(c, 12, 3, "OHBBBBBSSO", CHAR_MAP)
+    row(c, 13, 3, "OHBBBBBSSO", CHAR_MAP)
+    row(c, 14, 4, "OSSSSSSO", CHAR_MAP)
+    row(c, 15, 5, "DDDDDD", CHAR_MAP)
+    return c
+
+
+POSE_DOWN = base_character("both")
+POSE_UP = base_character("none")
+POSE_LEFT = base_character("left")
+POSE_RIGHT = base_character("right")
+
+DIRECTIONS = {"down": POSE_DOWN, "up": POSE_UP, "left": POSE_LEFT, "right": POSE_RIGHT}
+
+IDLE_OFFSETS = [(0, 0), (0, -1)]
+WALK_OFFSETS = [(0, 0), (-1, -1), (0, 0), (1, -1)]
+
+
+def render_frame(pose: dict, dx: int, dy: int) -> Image.Image:
+    img = Image.new("RGBA", (LOGICAL, LOGICAL), TRANSPARENT)
+    px = img.load()
+    for (x, y), color in pose.items():
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < LOGICAL and 0 <= ny < LOGICAL:
+            px[nx, ny] = color
+    return img.resize((FRAME, FRAME), Image.NEAREST)
+
+
+def build_character_frames():
+    frames = {}
+    for direction, pose in DIRECTIONS.items():
+        for i, (dx, dy) in enumerate(IDLE_OFFSETS):
+            frames[f"idle_{direction}_{i}"] = render_frame(pose, dx, dy)
+        for i, (dx, dy) in enumerate(WALK_OFFSETS):
+            frames[f"walk_{direction}_{i}"] = render_frame(pose, dx, dy)
+    return frames
+
+
+# --- tiles -------------------------------------------------------------------
+
+
+def tile_canvas():
+    return [[TOK_PANEL for _ in range(LOGICAL)] for _ in range(LOGICAL)]
+
+
+def fill_rect(grid, x0, y0, x1, y1, color):
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            if 0 <= x < LOGICAL and 0 <= y < LOGICAL:
+                grid[y][x] = color
+
+
+def border(grid, color):
+    for x in range(LOGICAL):
+        grid[0][x] = color
+        grid[LOGICAL - 1][x] = color
+    for y in range(LOGICAL):
+        grid[y][0] = color
+        grid[y][LOGICAL - 1] = color
+
+
+def grid_to_image(grid) -> Image.Image:
+    img = Image.new("RGBA", (LOGICAL, LOGICAL))
+    px = img.load()
+    for y in range(LOGICAL):
+        for x in range(LOGICAL):
+            px[x, y] = grid[y][x]
+    return img.resize((FRAME, FRAME), Image.NEAREST)
+
+
+def build_tile_floor_a():
+    g = tile_canvas()
+    border(g, TOK_LINE_SOFT)
+    return grid_to_image(g)
+
+
+def build_tile_floor_b():
+    g = [[TOK_PANEL_ALT for _ in range(LOGICAL)] for _ in range(LOGICAL)]
+    border(g, TOK_LINE_SOFT)
+    # a couple of subtle flecks so it doesn't read as perfectly flat
+    for x, y in [(4, 5), (11, 9), (7, 12)]:
+        g[y][x] = TOK_LINE
+    return grid_to_image(g)
+
+
+def build_tile_wall_edge():
+    g = tile_canvas()
+    fill_rect(g, 0, 0, 15, 4, TOK_VOID)
+    fill_rect(g, 0, 4, 15, 4, TOK_LINE)  # trim highlight line
+    border(g, TOK_LINE_SOFT)
+    return grid_to_image(g)
+
+
+def build_tile_desk():
+    g = tile_canvas()
+    border(g, TOK_LINE_SOFT)
+    fill_rect(g, 2, 5, 13, 12, TOK_DESK)
+    fill_rect(g, 2, 5, 13, 5, TOK_LINE)  # desk edge highlight
+    fill_rect(g, 4, 7, 9, 9, TOK_VOID)  # "monitor" recess
+    g[8][6] = TOK_CYAN
+    g[8][7] = TOK_CYAN
+    return grid_to_image(g)
+
+
+def build_tile_review_table():
+    g = tile_canvas()
+    border(g, TOK_LINE_SOFT)
+    fill_rect(g, 1, 4, 14, 13, TOK_AMBER_FILL)
+    fill_rect(g, 1, 4, 14, 4, TOK_AMBER)
+    fill_rect(g, 1, 13, 14, 13, TOK_AMBER)
+    fill_rect(g, 1, 4, 1, 13, TOK_AMBER)
+    fill_rect(g, 14, 4, 14, 13, TOK_AMBER)
+    return grid_to_image(g)
+
+
+def build_tile_nova_office():
+    g = [[TOK_VIOLET_FILL for _ in range(LOGICAL)] for _ in range(LOGICAL)]
+    border(g, TOK_LINE_SOFT)
+    fill_rect(g, 3, 5, 12, 12, TOK_VOID)
+    fill_rect(g, 3, 5, 12, 5, TOK_VIOLET)
+    fill_rect(g, 3, 12, 12, 12, TOK_VIOLET)
+    fill_rect(g, 3, 5, 3, 12, TOK_VIOLET)
+    fill_rect(g, 12, 5, 12, 12, TOK_VIOLET)
+    # small hub/star glyph, orchestrator marker
+    for x, y in [(7, 8), (8, 8), (7, 9), (8, 9)]:
+        g[y][x] = TOK_VIOLET
+    return grid_to_image(g)
+
+
+TILE_BUILDERS = {
+    "floor_a": build_tile_floor_a,
+    "floor_b": build_tile_floor_b,
+    "wall_edge": build_tile_wall_edge,
+    "desk": build_tile_desk,
+    "review_table": build_tile_review_table,
+    "nova_office": build_tile_nova_office,
+}
+
+
+# --- packing + atlas JSON ----------------------------------------------------
+
+
+def pack_sheet(frames: dict, cols: int, out_png: str, out_json: str):
+    names = list(frames.keys())
+    rows = (len(names) + cols - 1) // cols
+    sheet_w, sheet_h = cols * FRAME, rows * FRAME
+    sheet = Image.new("RGBA", (sheet_w, sheet_h), (0, 0, 0, 0))
+
+    atlas_frames = {}
+    for idx, name in enumerate(names):
+        col, r = idx % cols, idx // cols
+        x, y = col * FRAME, r * FRAME
+        sheet.paste(frames[name], (x, y))
+        atlas_frames[name] = {
+            "frame": {"x": x, "y": y, "w": FRAME, "h": FRAME},
+            "rotated": False,
+            "trimmed": False,
+            "spriteSourceSize": {"x": 0, "y": 0, "w": FRAME, "h": FRAME},
+            "sourceSize": {"w": FRAME, "h": FRAME},
+        }
+
+    sheet.save(out_png)
+    atlas = {
+        "frames": atlas_frames,
+        "meta": {
+            "app": "generate-pixel-art.py",
+            "image": os.path.basename(out_png),
+            "format": "RGBA8888",
+            "size": {"w": sheet_w, "h": sheet_h},
+            "scale": "1",
+        },
+    }
+    with open(out_json, "w") as f:
+        json.dump(atlas, f, indent=2)
+    print(f"wrote {out_png} ({sheet_w}x{sheet_h}, {len(names)} frames)")
+    print(f"wrote {out_json}")
+
+
+def main():
+    characters = build_character_frames()
+    assert len(characters) == 24, f"expected 24 character frames, got {len(characters)}"
+    pack_sheet(
+        characters,
+        cols=6,
+        out_png=os.path.join(OUT_DIR, "characters.png"),
+        out_json=os.path.join(OUT_DIR, "characters.json"),
+    )
+
+    tiles = {key: builder() for key, builder in TILE_BUILDERS.items()}
+    pack_sheet(
+        tiles,
+        cols=3,
+        out_png=os.path.join(OUT_DIR, "tileset.png"),
+        out_json=os.path.join(OUT_DIR, "tileset.json"),
+    )
+
+
+if __name__ == "__main__":
+    main()
