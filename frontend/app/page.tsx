@@ -9,6 +9,8 @@ import { BriefStrip } from '@/components/office/BriefStrip';
 import { ApprovalsDock } from '@/components/office/ApprovalsDock';
 import { MemoryRecallPanel } from '@/components/office/MemoryRecallPanel';
 import { EmployeeSidePanel } from '@/components/office/EmployeeSidePanel';
+import { TeamRoster } from '@/components/office/TeamRoster';
+import { TeamActivity } from '@/components/office/TeamActivity';
 
 // Pixel-art office floor (see /root/.claude/plans/synchronous-yawning-unicorn.md).
 // Client-only: it owns a PIXI.Application (WebGL/canvas), so it's kept out
@@ -49,8 +51,14 @@ export default function Home() {
       />
       <BriefStrip brief={brief} onSubmitBrief={submitBrief} />
 
-      <div className="flex-1 p-4">
-        <OfficeFloorPixel agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-1 flex-col p-4">
+            <OfficeFloorPixel agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
+          </div>
+          <TeamRoster agents={agents} tasks={tasks} selectedAgentId={selectedAgentId} onSelectAgent={setSelectedAgentId} />
+        </div>
+        <TeamActivity messages={messages} />
       </div>
 
       <div id="approvals-dock">

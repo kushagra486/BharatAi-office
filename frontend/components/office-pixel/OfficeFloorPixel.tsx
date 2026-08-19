@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Application } from 'pixi.js';
 import type { Agent, HiveMessage, Task, TaskStatus } from '@bharat-ai-office/shared';
+import { agentStatus, tasksByAgentMap } from '@/lib/agentStatus';
 import { loadOfficeAssets, type OfficeAssets } from './assets';
 import { OfficeScene } from './pixiScene';
 import { STAGE_H, STAGE_W } from './coords';
@@ -14,14 +15,6 @@ export interface OfficeFloorPixelProps {
   tasks: Task[];
   messages: HiveMessage[];
   onSelectAgent: (agentId: string) => void;
-}
-
-function agentStatus(agentId: string, tasksByAgent: Map<string, Task[]>): TaskStatus {
-  const list = tasksByAgent.get(agentId) ?? [];
-  if (list.some((t) => t.status === 'blocked')) return 'blocked';
-  if (list.some((t) => t.status === 'working')) return 'working';
-  if (list.length > 0 && list.every((t) => t.status === 'done')) return 'done';
-  return 'idle';
 }
 
 export function OfficeFloorPixel({ agents, tasks, messages, onSelectAgent }: OfficeFloorPixelProps) {
@@ -133,12 +126,7 @@ export function OfficeFloorPixel({ agents, tasks, messages, onSelectAgent }: Off
     const scene = sceneRef.current;
     if (!scene) return;
 
-    const tasksByAgent = new Map<string, Task[]>();
-    for (const task of tasks) {
-      const list = tasksByAgent.get(task.agent_id) ?? [];
-      list.push(task);
-      tasksByAgent.set(task.agent_id, list);
-    }
+    const tasksByAgent = tasksByAgentMap(tasks);
     for (const agent of agents) {
       scene.setAgentStatus(agent.id, agent.id === 'nova' ? 'idle' : agentStatus(agent.id, tasksByAgent));
     }
