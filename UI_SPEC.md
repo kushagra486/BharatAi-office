@@ -8,7 +8,7 @@ This is the full frontend spec for **Bharat AI Office**: everything needed to de
 
 ## 1. What this product is
 
-You give the office one project brief. **Nova** (an LLM orchestrator) breaks it into a task graph and assigns work to 10 specialist AI employees — each a real spawned `claude` CLI process doing actual file edits and commits, not a simulation. You watch it happen on a 2D office floor: agents' status animates as they work, they walk to a review table to hand off finished work, small message "envelopes" fly between agents for status updates, and an approvals dock surfaces only the decisions that need a human (spend, destructive ops, scope changes) — everything else Nova resolves itself.
+You give the office one project brief. **Nova** (an LLM orchestrator) breaks it into a task graph and assigns work to 10 specialist AI employees — each a real LLM-driven agent with its own tool-use loop (file read/write, shell commands) doing actual file edits and commits, not a simulation. Every agent's calls run through a multi-provider LLM router (NVIDIA NIM, Groq, OpenRouter), each assigned a distinct provider+model so concurrent agents don't clog one API. You watch it happen on a 2D office floor: agents' status animates as they work, they walk to a review table to hand off finished work, small message "envelopes" fly between agents for status updates, and an approvals dock surfaces only the decisions that need a human (spend, destructive ops, scope changes) — everything else Nova resolves itself.
 
 **This is a dashboard for watching/directing autonomous AI agents, not a multiplayer virtual office.** There is no human-controlled avatar, no free navigation, no video calls, no chat between human coworkers. The only human-in-the-loop actions are: submit a brief, approve/deny an escalation, search memory, and click an agent to inspect it.
 
@@ -120,8 +120,8 @@ One socket, JSON text frames, each shaped `{ type: string, payload: ... }`:
 | `escalation:resolved` | `Escalation` | An escalation was approved/denied |
 | `memory:new` | `MemoryEntry` | An agent wrote to shared memory |
 | `brief:update` | `BriefRecord` | Brief status changed (planning → in_progress → complete) |
-| `pty:output` | `{ agentId: string, taskId: string, chunk: string }` | Live terminal output chunk for an employee's running `claude` process — append to a per-agent text buffer |
-| `pty:exit` | `{ agentId: string, taskId: string, exitCode: number }` | That process finished (the corresponding `task:update` already reflects the outcome — no UI action needed beyond that) |
+| `agent:output` | `{ agentId: string, taskId: string, chunk: string }` | A step-log chunk from an employee's tool-use loop (model reasoning, then each tool call + result) — append to a per-agent text buffer |
+| `agent:exit` | `{ agentId: string, taskId: string, exitCode: number }` | That agent's loop finished (the corresponding `task:update` already reflects the outcome — no UI action needed beyond that) |
 
 Reconnect behavior: on close, retry after ~2s; mark UI as "disconnected" in the meantime (see HudBar, section 6.1).
 
@@ -280,7 +280,7 @@ idle     otherwise (including Nova, who is always shown idle — she never has t
 **Contents, top to bottom:**
 - Header: agent name + role, close button.
 - "Current task" block: the task they're actively working (or most recent one), title + description, or "Idle — no task assigned."
-- "Live terminal" block: a scrolling monospace `<pre>`-style panel showing that agent's real `claude` process output, appended incrementally as `pty:output` chunks arrive (this reads as a natural typewriter effect since it's genuinely streaming — no extra animation needed). Show "(no output yet)" when empty.
+- "Live terminal" block: a scrolling monospace `<pre>`-style panel showing that agent's tool-use loop as it runs, appended incrementally as `agent:output` chunks arrive (reasoning text, then each tool call + result — a step-by-step log, not literal token streaming). Show "(no output yet)" when empty.
 - "Activity log" block: the last ~30 messages involving this agent (either `from_agent` or `to_agent` matches), each showing time, `from→to`, and body text.
 
 **Data needed:** `agent: Agent | null` (null = closed), `tasks: Task[]`, `messages: HiveMessage[]`, `terminalBuffer: string` (that agent's accumulated pty output), `onClose()`.

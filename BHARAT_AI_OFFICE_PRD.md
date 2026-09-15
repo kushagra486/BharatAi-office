@@ -229,3 +229,62 @@ Typography: system UI sans for body, a monospace face (`ui-monospace`) for all d
 - **Sandboxing**: employees have real file/git access — scope each to its own subdirectory (`PROJECT_WORKDIR/{agentId}/`) and never let an employee process run `git push --force` or operate outside its directory; the single-committer daemon-side git module is the enforcement point.
 - **Task-complete detection**: the `TASK_DONE:` marker convention is a starting point — Claude Code's actual output format should be tested early to confirm a reliable parse signal exists.
 - **Cost**: Groq calls for Nova are free-tier; the real cost driver is Claude Code session usage across 10 concurrent employees — worth tracking from day one.
+
+---
+
+## 12. v2 addendum — multi-provider employee execution (supersedes §5.3, §6, §8.1, Prompt 3)
+
+**Superseded, not deleted, so the original design decision and its
+reasoning stay on the record.** Sections 5.3, 6, 8.1, and Prompt 3 above
+describe employees running on the real Claude Code CLI, with Groq powering
+only Nova's coordination layer, and call keeping those two roles distinct
+"the single most important architectural fact" in this document. That is
+no longer how this system works.
+
+**What changed:** employees no longer spawn `claude` CLI processes via
+`node-pty`. Every one of the 11 seats — Nova included — now runs against a
+**multi-provider LLM router** (`daemon/src/llm/router.ts`) spanning three
+OpenAI-API-compatible providers: **NVIDIA NIM** (free-tier, many models
+under one key), **Groq**, and **OpenRouter**. Each seat is assigned a
+distinct provider+model pair (`daemon/src/llm/assignments.ts`) with a
+fallback chain on the *other* providers, so 11 agents working concurrently
+spread across many separate rate-limit buckets instead of contending for
+one — this was the explicit motivation: avoid API "clogging"/lag under
+concurrent load, and give per-agent visibility into usage (`GET
+/api/llm/usage`).
+
+**Why this is a bigger change than it sounds:** Claude Code's CLI gave
+each employee a full agentic loop — file read/write, bash, git — for free,
+enforced by its own permission engine (`--allowedTools`/
+`--disallowedTools`/`--add-dir`). Raw chat-completion APIs don't ship that.
+`daemon/src/agents/AgentRunner.ts` now implements that loop by hand: a
+turn-by-turn tool-calling conversation (`daemon/src/agents/tools.ts`
+defines `read_file`, `write_file`, `list_directory`, `run_command`,
+`mark_task_done`, `escalate`), each tool path-guarded to the employee's own
+`PROJECT_WORKDIR/{agentId}/` subdirectory. There is still no git tool —
+`gitModule.ts` remains the sole committer, unchanged — and `run_command`
+denylists git/network/sudo invocations as defense in depth. The safety
+model is now enforced by this codebase's own guards rather than Claude
+Code's, with the same intended blast radius (an employee's own
+subdirectory) as before.
+
+**What stayed the same:** the Hive schema, the escalation policy and
+Nova's triage of it, the single-committer git pattern, the WebSocket event
+model (the two employee-terminal event types were renamed `pty:output`/
+`pty:exit` → `agent:output`/`agent:exit` since there's no literal PTY
+anymore, but the shape and the frontend contract are unchanged), and the
+overall Hive/Nova/floor-visualization architecture.
+
+**New trade-offs to track:**
+- Model-authored `run_command` calls can still do anything destructive
+  *within* an employee's own subdirectory — same risk surface Claude
+  Code's Bash tool already had, just enforced by our own code now instead
+  of Claude Code's permission engine.
+- Free-tier rate limits per provider/model aren't publicly guaranteed and
+  drift — the limiter's numbers (`daemon/src/llm/rateLimiter.ts`) are
+  starting defaults to tune against what you actually observe.
+- Tool-call turns are non-streaming (one full `chat.completions.create()`
+  per turn) rather than token-streamed, since streaming-with-tools support
+  is inconsistent across third-party OpenAI-compatible providers. The
+  employee side panel's "live terminal" is a step-by-step log (reasoning,
+  then each tool call + result) rather than a token-by-token feed.

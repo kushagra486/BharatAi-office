@@ -24,7 +24,7 @@ const OfficeFloorPixel = dynamic(
 const SESSION_ID = 'OFFICE-001';
 
 export default function Home() {
-  const { connected, agents, tasks, messages, escalations, memories, brief, ptyOutputByAgent } = useHiveSocket();
+  const { connected, agents, tasks, messages, escalations, memories, brief, agentOutputByAgent } = useHiveSocket();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [recallOpen, setRecallOpen] = useState(false);
 
@@ -71,7 +71,7 @@ export default function Home() {
         agent={selectedAgent}
         tasks={tasks}
         messages={messages}
-        terminalBuffer={selectedAgent ? ptyOutputByAgent[selectedAgent.id] ?? '' : ''}
+        terminalBuffer={selectedAgent ? agentOutputByAgent[selectedAgent.id] ?? '' : ''}
         onClose={() => setSelectedAgentId(null)}
       />
     </main>

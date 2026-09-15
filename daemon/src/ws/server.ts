@@ -3,12 +3,13 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { HiveEvent } from '@bharat-ai-office/shared';
 import * as hive from '../hive/hive';
 import { hiveEvents } from '../hive/hive';
-import { ptyEvents, type PtyExitEvent, type PtyOutputEvent } from '../pty/PtyManager';
+import { agentEvents, type AgentExitEvent, type AgentOutputEvent } from '../agents/AgentRunner';
 
-// Broadcasts every Hive write (Phase 1's hiveEvents bus) plus PTY output/exit
-// (Phase 2's ptyEvents bus, for the employee side panel's live terminal
-// feed) to all connected clients over one WebSocket. A fresh client gets a
-// full snapshot on connect so it doesn't have to wait for the next write.
+// Broadcasts every Hive write (hiveEvents bus) plus each employee's live
+// tool-use output/exit (agentEvents bus, for the employee side panel's
+// terminal feed) to all connected clients over one WebSocket. A fresh
+// client gets a full snapshot on connect so it doesn't have to wait for the
+// next write.
 export function attachWebSocketServer(httpServer: HttpServer): WebSocketServer {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
@@ -38,12 +39,12 @@ export function attachWebSocketServer(httpServer: HttpServer): WebSocketServer {
 
   hiveEvents.on('hive-event', broadcast);
 
-  ptyEvents.on('output', (event: PtyOutputEvent) => {
-    broadcast({ type: 'pty:output', payload: event });
+  agentEvents.on('output', (event: AgentOutputEvent) => {
+    broadcast({ type: 'agent:output', payload: event });
   });
 
-  ptyEvents.on('exit', (event: PtyExitEvent) => {
-    broadcast({ type: 'pty:exit', payload: event });
+  agentEvents.on('exit', (event: AgentExitEvent) => {
+    broadcast({ type: 'agent:exit', payload: event });
   });
 
   return wss;

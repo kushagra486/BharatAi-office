@@ -41,8 +41,9 @@ export function EmployeeSidePanel({ agent, tasks, messages, terminalBuffer, onCl
 
           <div className="flex-1 overflow-y-auto border-b border-line p-4">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-wide text-cyan">Live terminal</p>
-            {/* Chunks arrive incrementally over the socket as claude -p streams,
-                so simply appending them already reads as a typewriter feed. */}
+            {/* Chunks arrive incrementally over the socket as the agent's tool-use
+                loop completes each turn (model reasoning, then tool calls/results),
+                so simply appending them reads as a live step-by-step log. */}
             <pre className="whitespace-pre-wrap break-words rounded-lg bg-void p-3 font-mono text-[11px] leading-relaxed text-[#8FE9DC]">
               {terminalBuffer || '(no output yet)'}
             </pre>

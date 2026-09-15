@@ -1,41 +1,51 @@
 # Bharat AI Office
 
 A local-first multi-agent harness that turns a single project brief into a
-fully staffed AI office — 10 employee agents (real `claude` CLI sessions)
-coordinated by an orchestrator (Nova), visualized as a living 2D office
-floor.
+fully staffed AI office — 10 employee agents coordinated by an orchestrator
+(Nova), visualized as a living 2D office floor.
 
 See [`BHARAT_AI_OFFICE_PRD.md`](./BHARAT_AI_OFFICE_PRD.md) for the full
-product spec.
+product spec, including the v2 addendum describing the architecture below.
 
 ## Two-process architecture (read this before you deploy anywhere)
 
-This is **not** a typical Next.js app you can drop on Vercel. It is two
-cooperating local processes:
+This is **not** a typical Next.js app you can drop on Vercel as-is. It is
+two cooperating processes:
 
 1. **`/daemon`** — a Node.js/TypeScript process that:
-   - spawns real `claude` CLI processes per employee via `node-pty`
-     (persistent PTYs with live file/git access to your project directory)
+   - runs Nova and all 10 employees as LLM-driven agents, each with a
+     hand-rolled tool-use loop (read/write files, run shell commands,
+     mark a task done, or escalate) sandboxed to its own subdirectory —
+     see `daemon/src/agents/AgentRunner.ts`
+   - routes every agent's LLM calls through a multi-provider router
+     (`daemon/src/llm/router.ts`) spanning **NVIDIA NIM**, **Groq**, and
+     **OpenRouter** — each of the 11 seats is assigned a distinct
+     provider+model (`daemon/src/llm/assignments.ts`) so 11 agents working
+     concurrently spread across many separate rate-limit buckets instead of
+     clogging one, with automatic fallback if a provider is rate-limited or
+     down
    - owns the Hive (a local SQLite database: tasks, messages, memory,
      escalations)
-   - runs Nova, the orchestrator, backed by the Groq API
+   - is the sole process that ever runs `git`, against a single checked-out
+     repo at `PROJECT_WORKDIR` (single-committer pattern — avoids
+     `.git/index.lock` corruption under concurrency)
    - broadcasts Hive state changes over a WebSocket to the frontend
 2. **`/frontend`** — a Next.js app that renders the office floor, side
    panel, and approvals dock, and talks to the daemon over that WebSocket
-   (plus a small REST surface for approvals/recall).
+   (plus a small REST surface for briefs/approvals/recall).
 
-The daemon **cannot** run on serverless hosting (Vercel functions, etc.):
-it needs long-lived PTY processes and direct filesystem/git access to the
-project the employees are actually working on. Both processes must run
-locally, side by side, on the same machine. A future Electron build
-(Phase 7 in the PRD) packages both into one native app — it's a packaging
-layer on top of this same architecture, not a replacement for it.
+The daemon is a small always-on Node service, not a fit for classic
+request/response serverless functions: it holds a long-lived WebSocket to
+the frontend, owns a local SQLite file, and runs `git` against a real
+working-tree checkout. Both processes run side by side; a future Electron
+build (Phase 7 in the PRD) packages both into one native app.
 
 ## Getting started
 
 ```bash
 cp .env.example .env
-# fill in GROQ_API_KEY and PROJECT_WORKDIR
+# fill in at least one of NVIDIA_API_KEY / GROQ_API_KEY / OPENROUTER_API_KEY,
+# and PROJECT_WORKDIR
 
 npm install
 
@@ -52,14 +62,27 @@ and the WebSocket. The frontend runs at `localhost:3000` and connects to
 the daemon at `ws://localhost:4317`.
 
 `PROJECT_WORKDIR` is the directory employee agents actually work in. Each
-employee gets its own subdirectory (`PROJECT_WORKDIR/{agentId}/`) — see
-the PRD's sandboxing note in section 11. Only the daemon ever runs `git`
-directly; employee processes never push or force-push.
+employee gets its own subdirectory (`PROJECT_WORKDIR/{agentId}/`) that its
+tool calls (`read_file`/`write_file`/`list_directory`/`run_command`) are
+sandboxed to — see the PRD's sandboxing note in section 11 and the v2
+addendum. Only the daemon ever runs `git`; employees have no git tool at
+all, and `run_command` denylists git/network/sudo invocations as a second
+line of defense.
+
+### Getting API keys
+
+- **NVIDIA NIM**: create a free key at [build.nvidia.com](https://build.nvidia.com) — one key gives access to a large catalog of hosted models.
+- **Groq**: free key at [console.groq.com](https://console.groq.com/keys).
+- **OpenRouter**: free key at [openrouter.ai/keys](https://openrouter.ai/keys) — many free-tier models available.
+
+You only need one configured to run at all; more configured providers means
+more rate-limit headroom since each agent's assignment has fallbacks on the
+*other* providers (see `daemon/src/llm/assignments.ts`).
 
 ## Workspaces
 
 | Path | What it is |
 |---|---|
 | `/shared` | Hive types, the agent roster, and design tokens — imported by both `/daemon` and `/frontend` so the schema and visuals never drift apart |
-| `/daemon` | PtyManager, Hive (SQLite), Nova (Groq orchestrator), WebSocket bridge, REST endpoints |
+| `/daemon` | AgentRunner (tool-use loop), the multi-provider LLM router, Hive (SQLite), Nova, WebSocket bridge, REST endpoints |
 | `/frontend` | Next.js office floor UI |

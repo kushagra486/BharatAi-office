@@ -11,7 +11,7 @@ import { OfficeFloorPixel } from '@/components/office-pixel/OfficeFloorPixel';
 import { EmployeeSidePanel } from '@/components/office/EmployeeSidePanel';
 
 export default function OfficePixelPreview() {
-  const { agents, tasks, messages, ptyOutputByAgent } = useHiveSocket();
+  const { agents, tasks, messages, agentOutputByAgent } = useHiveSocket();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const selectedAgent = useMemo(() => agents.find((a) => a.id === selectedAgentId) ?? null, [agents, selectedAgentId]);
 
@@ -25,7 +25,7 @@ export default function OfficePixelPreview() {
         agent={selectedAgent}
         tasks={tasks}
         messages={messages}
-        terminalBuffer={selectedAgent ? ptyOutputByAgent[selectedAgent.id] ?? '' : ''}
+        terminalBuffer={selectedAgent ? agentOutputByAgent[selectedAgent.id] ?? '' : ''}
         onClose={() => setSelectedAgentId(null)}
       />
     </main>

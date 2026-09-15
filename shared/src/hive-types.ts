@@ -77,7 +77,7 @@ export type HiveEvent =
   | { type: 'escalation:resolved'; payload: Escalation }
   | { type: 'memory:new'; payload: MemoryEntry }
   | { type: 'brief:update'; payload: BriefRecord }
-  // Employee side panel terminal feed — sourced from PtyManager's
-  // ptyEvents, not the Hive tables, but broadcast on the same socket.
-  | { type: 'pty:output'; payload: { agentId: string; taskId: string; chunk: string } }
-  | { type: 'pty:exit'; payload: { agentId: string; taskId: string; exitCode: number } };
+  // Employee side panel terminal feed — sourced from AgentRunner's
+  // agentEvents, not the Hive tables, but broadcast on the same socket.
+  | { type: 'agent:output'; payload: { agentId: string; taskId: string; chunk: string } }
+  | { type: 'agent:exit'; payload: { agentId: string; taskId: string; exitCode: number } };

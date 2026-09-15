@@ -5,6 +5,7 @@ import './hive/db'; // initializes + migrates the Hive on import
 import * as hive from './hive/hive';
 import { ensureRepo } from './git/gitModule';
 import { applyHumanResolution, decomposeBrief, startNovaLoop } from './nova/nova';
+import { getUsage } from './llm/router';
 import { attachWebSocketServer } from './ws/server';
 
 async function main() {
@@ -54,6 +55,11 @@ async function main() {
   });
 
   app.get<{ Querystring: { q?: string } }>('/api/memory/search', async (request) => hive.searchMemory(request.query.q ?? ''));
+
+  // Per-agent LLM call/token visibility across the multi-provider router —
+  // the "token control" surface. Read-only for now; no dedicated frontend
+  // panel yet, but inspectable directly.
+  app.get('/api/llm/usage', async () => getUsage());
 
   await app.listen({ port: env.DAEMON_PORT, host: '0.0.0.0' });
 

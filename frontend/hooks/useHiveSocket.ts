@@ -14,7 +14,7 @@ export interface HiveSocketState {
   memories: MemoryEntry[];
   brief: BriefRecord | null;
   // Per-agent accumulated terminal output, capped, for the employee side panel.
-  ptyOutputByAgent: Record<string, string>;
+  agentOutputByAgent: Record<string, string>;
 }
 
 const TERMINAL_BUFFER_CAP = 20_000;
@@ -28,7 +28,7 @@ const initialState: HiveSocketState = {
   escalations: [],
   memories: [],
   brief: null,
-  ptyOutputByAgent: {},
+  agentOutputByAgent: {},
 };
 
 function applyEvent(prev: HiveSocketState, event: HiveEvent): HiveSocketState {
@@ -61,13 +61,13 @@ function applyEvent(prev: HiveSocketState, event: HiveEvent): HiveSocketState {
       return { ...prev, memories: [event.payload, ...prev.memories].slice(0, 300) };
     case 'brief:update':
       return { ...prev, brief: event.payload };
-    case 'pty:output': {
+    case 'agent:output': {
       const key = event.payload.agentId;
-      const existing = prev.ptyOutputByAgent[key] ?? '';
+      const existing = prev.agentOutputByAgent[key] ?? '';
       const next = (existing + event.payload.chunk).slice(-TERMINAL_BUFFER_CAP);
-      return { ...prev, ptyOutputByAgent: { ...prev.ptyOutputByAgent, [key]: next } };
+      return { ...prev, agentOutputByAgent: { ...prev.agentOutputByAgent, [key]: next } };
     }
-    case 'pty:exit':
+    case 'agent:exit':
       return prev; // the corresponding task:update already reflects the outcome
     default:
       return prev;

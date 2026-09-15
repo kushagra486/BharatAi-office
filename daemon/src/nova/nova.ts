@@ -1,40 +1,16 @@
-import Groq from 'groq-sdk';
 import { EMPLOYEE_ROSTER, ROSTER } from '@bharat-ai-office/shared';
 import type { HiveMessage, Task } from '@bharat-ai-office/shared';
-import { env } from '../env';
 import * as hive from '../hive/hive';
-import { ptyManager } from '../pty/PtyManager';
+import { agentRunner } from '../agents/AgentRunner';
+import { chatCompleteJson } from '../llm/router';
 import { ESCALATION_POLICY, NOVA_SYSTEM_PROMPT } from './prompts';
 
-const MODEL = 'llama-3.3-70b-versatile';
 const POLL_INTERVAL_MS = 4000;
 
-const groq = env.GROQ_API_KEY ? new Groq({ apiKey: env.GROQ_API_KEY }) : null;
-
-function requireGroq(): Groq {
-  if (!groq) {
-    throw new Error('GROQ_API_KEY is not set — Nova cannot reach the Groq API. See .env.example.');
-  }
-  return groq;
-}
-
-async function callGroqJson(userPrompt: string, systemPrompt: string): Promise<Record<string, unknown>> {
-  const completion = await requireGroq().chat.completions.create({
-    model: MODEL,
-    temperature: 0.2,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-  });
-  const content = completion.choices[0]?.message?.content ?? '{}';
-  try {
-    return JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
+// Nova's coordination calls go through the same multi-provider router every
+// employee uses (llm/router.ts) — her assignment (llm/assignments.ts)
+// governs which provider/model she reasons on, with automatic fallback if
+// it's rate-limited or down.
 
 // --- 1. Brief -> task graph decomposition -----------------------------------
 
@@ -73,7 +49,7 @@ Rules:
 - Keep the graph tight: usually 6-14 tasks for a typical brief.
 - Order tasks so a reader scanning top-to-bottom sees dependencies before dependents.`;
 
-  const parsed = await callGroqJson(prompt, NOVA_SYSTEM_PROMPT);
+  const parsed = await chatCompleteJson('nova', NOVA_SYSTEM_PROMPT, prompt);
   const rawTasks = Array.isArray(parsed.tasks) ? (parsed.tasks as TaskGraphTask[]) : [];
 
   const validAgentIds = new Set(EMPLOYEE_ROSTER.map((a) => a.id));
@@ -118,7 +94,7 @@ human approval; if false, explain how you're resolving it yourself.`;
 
   let result: TriageResult;
   try {
-    const parsed = await callGroqJson(prompt, NOVA_SYSTEM_PROMPT);
+    const parsed = await chatCompleteJson('nova', NOVA_SYSTEM_PROMPT, prompt);
     result = {
       escalate: Boolean(parsed.escalate),
       reason: typeof parsed.reason === 'string' ? parsed.reason : 'No reason given.',
@@ -161,9 +137,9 @@ function dispatchReadyTasks(): void {
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   for (const task of tasks) {
     if (!isReady(task, tasksById)) continue;
-    if (ptyManager.isBusy(task.agent_id)) continue;
+    if (agentRunner.isBusy(task.agent_id)) continue;
     try {
-      ptyManager.startTask(task.agent_id, task.id);
+      agentRunner.startTask(task.agent_id, task.id);
     } catch (err) {
       console.error(`[nova] failed to start task ${task.id} for ${task.agent_id}`, err);
     }
@@ -202,7 +178,7 @@ deliverable summary. Respond with strict JSON only:
 
   let summary = 'QA pass could not run (Groq unreachable).';
   try {
-    const parsed = await callGroqJson(prompt, NOVA_SYSTEM_PROMPT);
+    const parsed = await chatCompleteJson('nova', NOVA_SYSTEM_PROMPT, prompt);
     summary = typeof parsed.summary === 'string' ? parsed.summary : summary;
     const concerns = Array.isArray(parsed.concerns) ? (parsed.concerns as string[]) : [];
     if (concerns.length) {
@@ -240,7 +216,7 @@ export function stopNovaLoop(): void {
 // The Hive schema (PRD 5.4) doesn't link an escalation to a task id, so the
 // "blocked employee" whose work should proceed/stop is found heuristically:
 // their most recently created still-blocked task. In practice an agent has
-// at most one blocked task at a time (PtyManager only runs one task per
+// at most one blocked task at a time (AgentRunner only runs one task per
 // agent), so this is unambiguous outside pathological cases.
 export async function applyHumanResolution(escalationId: number, resolution: 'approved' | 'denied') {
   const escalation = hive.resolveEscalation(escalationId, resolution);
@@ -254,10 +230,10 @@ export async function applyHumanResolution(escalationId: number, resolution: 'ap
       type: 'report',
       body: `Approved: ${escalation.description}`,
     });
-    // There's no live PTY stdin to unblock — each task runs as a one-shot
-    // `claude -p` process (see PtyManager). "Let the blocked employee's
-    // next input proceed" becomes: requeue the task as idle so Nova's
-    // dispatch loop spawns a fresh run of it on its next tick.
+    // There's no live conversation to resume — each task runs as a fresh
+    // tool-use loop (see AgentRunner). "Let the blocked employee proceed"
+    // becomes: requeue the task as idle so Nova's dispatch loop starts a
+    // new run of it on its next tick.
     if (task) hive.updateTaskStatus(task.id, 'idle');
   } else {
     hive.sendMessage({
