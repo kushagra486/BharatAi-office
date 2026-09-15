@@ -9,6 +9,39 @@ const WALK_LEG_MS = 1400; // time to walk each leg (home->table, table->home) �
 const DWELL_MS = 400; // pause at the review table — WALK_LEG_MS*2 + DWELL_MS = 3200ms, matching old WALK_DURATION_MS
 const ENVELOPE_FLIGHT_MS = 1600; // matches old OfficeFloor.tsx ENVELOPE_FLIGHT_MS
 
+// Department -> the floor rug tinting its desk cluster sits on, so the room
+// reads as distinct zones even though desks are laid out in two plain rows
+// (see FRONTEND_VISION.md §2). Nova's tile already gets its own violet
+// `nova_office` decor sprite, so it isn't in this map.
+const DEPT_RUG: Record<string, TileKey> = {
+  eng: 'rug_eng',
+  design: 'rug_design',
+  data: 'rug_data',
+  ops: 'rug_ops',
+};
+
+// Windows punched into the exterior wall (row 0), avoiding the columns Nova's
+// enclosed office sits above.
+const WINDOW_COLS = new Set([3, 7, 22, 26]);
+
+// Nova's office is a small enclosed room in the top-center: side walls on
+// rows 1-3, a wall with a 2-tile door gap closing it off at row 4.
+const NOVA_WALL_COLS = new Set([11, 20]);
+const NOVA_WALL_ROW = 4;
+const NOVA_WALL_COL_RANGE = { min: 11, max: 20 };
+const NOVA_DOOR_COLS = new Set([15, 16]);
+
+// Fixed set-dressing placed in the aisles/corners that desks don't occupy.
+const DECOR_PROPS: { col: number; row: number; key: TileKey }[] = [
+  { col: 2, row: 2, key: 'plant' },
+  { col: 27, row: 2, key: 'plant' },
+  { col: 15, row: 14, key: 'plant' },
+  { col: 2, row: 8, key: 'water_cooler' },
+  { col: 27, row: 8, key: 'printer' },
+  { col: 2, row: 13, key: 'bookshelf' },
+  { col: 27, row: 13, key: 'bookshelf' },
+];
+
 function easeInOut(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
@@ -58,7 +91,7 @@ export class OfficeScene {
     agents: Agent[],
     onSelectAgent: (agentId: string) => void
   ) {
-    const floorLayer = this.buildFloorLayer();
+    const floorLayer = this.buildFloorLayer(agents);
     const decorLayer = this.buildDecorLayer(agents);
     const charactersLayer = new Container();
 
@@ -184,12 +217,55 @@ export class OfficeScene {
     });
   }
 
-  private buildFloorLayer(): Container {
+  /**
+   * Lays the floor tile-by-tile, overriding the plain checkerboard with:
+   * department rugs under each employee's desk (so the office reads as
+   * distinct team zones without moving anyone), windows in the exterior
+   * wall, and a partitioned room enclosing Nova's desk. See FRONTEND_VISION.md
+   * §2 for the "real office" rationale.
+   */
+  private buildFloorLayer(agents: Agent[]): Container {
     const layer = new Container();
+
+    // The desk sprite (decor layer, drawn after this) covers almost its
+    // entire tile, so a rug painted only on that exact tile would be
+    // invisible. Instead paint a small patch flanking each desk — the desk
+    // row plus the aisle tile behind it — so the department color reads
+    // clearly on either side without touching a neighboring desk's patch
+    // (roster.ts spaces desks at least 4 tiles apart).
+    const rugAt = new Map<string, TileKey>();
+    for (const agent of agents) {
+      if (agent.id === 'nova') continue;
+      const rug = DEPT_RUG[agent.dept];
+      if (!rug) continue;
+      const { col, row } = toTile({ x: agent.home_x, y: agent.home_y });
+      for (const dc of [-1, 0, 1]) {
+        for (const dr of [0, 1]) {
+          rugAt.set(`${col + dc},${row + dr}`, rug);
+        }
+      }
+    }
+
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
-        const isEdge = row === 0 || row === GRID_ROWS - 1 || col === 0 || col === GRID_COLS - 1;
-        const key: TileKey = isEdge ? 'wall_edge' : (row + col) % 2 === 0 ? 'floor_a' : 'floor_b';
+        const isOuterEdge = row === 0 || row === GRID_ROWS - 1 || col === 0 || col === GRID_COLS - 1;
+        const isNovaWallRow = row === NOVA_WALL_ROW && col >= NOVA_WALL_COL_RANGE.min && col <= NOVA_WALL_COL_RANGE.max;
+        const isNovaSideWall = row > 0 && row < NOVA_WALL_ROW && NOVA_WALL_COLS.has(col);
+
+        let key: TileKey;
+        const rugKey = rugAt.get(`${col},${row}`);
+        if (rugKey) {
+          key = rugKey;
+        } else if (isOuterEdge) {
+          key = row === 0 && WINDOW_COLS.has(col) ? 'window' : 'wall_edge';
+        } else if (isNovaWallRow && !NOVA_DOOR_COLS.has(col)) {
+          key = 'wall_inner';
+        } else if (isNovaSideWall) {
+          key = 'wall_inner';
+        } else {
+          key = (row + col) % 2 === 0 ? 'floor_a' : 'floor_b';
+        }
+
         const tile = new Sprite(this.assets.tiles[key]);
         tile.position.set(col * TILE_SIZE, row * TILE_SIZE);
         layer.addChild(tile);
@@ -216,6 +292,13 @@ export class OfficeScene {
     table.scale.set(1.6);
     table.position.set(tablePos.col * TILE_SIZE + TILE_SIZE / 2, tablePos.row * TILE_SIZE + TILE_SIZE / 2);
     layer.addChild(table);
+
+    for (const prop of DECOR_PROPS) {
+      const sprite = new Sprite(this.assets.tiles[prop.key]);
+      sprite.anchor.set(0.5, 0.5);
+      sprite.position.set(prop.col * TILE_SIZE + TILE_SIZE / 2, prop.row * TILE_SIZE + TILE_SIZE / 2);
+      layer.addChild(sprite);
+    }
 
     // Dashed wire from each employee desk to the review table — ported
     // from OfficeFloor.tsx's SVG <line strokeDasharray>.

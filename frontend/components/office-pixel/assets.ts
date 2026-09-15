@@ -12,12 +12,45 @@ export type WalkFrameIndex = 0 | 1 | 2 | 3;
 
 export type CharacterFrameKey = `idle_${Direction}_${IdleFrameIndex}` | `walk_${Direction}_${WalkFrameIndex}`;
 
-export type TileKey = 'floor_a' | 'floor_b' | 'wall_edge' | 'desk' | 'review_table' | 'nova_office';
+export type TileKey =
+  | 'floor_a'
+  | 'floor_b'
+  | 'wall_edge'
+  | 'wall_inner'
+  | 'window'
+  | 'desk'
+  | 'review_table'
+  | 'nova_office'
+  | 'plant'
+  | 'water_cooler'
+  | 'printer'
+  | 'bookshelf'
+  | 'rug_eng'
+  | 'rug_design'
+  | 'rug_data'
+  | 'rug_ops';
 
 export const FRAME_SIZE = 32; // px — matches TILE_SIZE in coords.ts by convention, not requirement
 
 const DIRECTIONS: Direction[] = ['down', 'up', 'left', 'right'];
-const TILE_KEYS: TileKey[] = ['floor_a', 'floor_b', 'wall_edge', 'desk', 'review_table', 'nova_office'];
+const TILE_KEYS: TileKey[] = [
+  'floor_a',
+  'floor_b',
+  'wall_edge',
+  'wall_inner',
+  'window',
+  'desk',
+  'review_table',
+  'nova_office',
+  'plant',
+  'water_cooler',
+  'printer',
+  'bookshelf',
+  'rug_eng',
+  'rug_design',
+  'rug_data',
+  'rug_ops',
+];
 
 export interface OfficeAssets {
   characterFrames: Record<CharacterFrameKey, Texture>;
@@ -164,6 +197,58 @@ function drawTile(key: TileKey): Graphics {
       g.rect(0, 0, s, s).fill(0x1a1530);
       g.roundRect(4, 6, s - 8, s - 10, 4).fill(0x2c2450).stroke({ width: 1.5, color: 0x8b7cf6 });
       break;
+    case 'window':
+      g.rect(0, 0, s, s).fill(0x0a0e14);
+      g.roundRect(3, 3, s - 6, s - 6, 2).fill(0x3f6380).stroke({ width: 1, color: 0x1d2836 });
+      g.rect(3, 3, s - 6, 5).fill(0x6ea0be);
+      g.rect(s / 2 - 1, 3, 2, s - 6).fill(0x1d2836);
+      g.rect(3, s / 2 - 1, s - 6, 2).fill(0x1d2836);
+      break;
+    case 'wall_inner':
+      g.rect(0, 0, s, s).fill(0x0a0e14).rect(0, s / 2 - 2, s, 3).fill(0x1d2836);
+      break;
+    case 'plant':
+      g.rect(0, 0, s, s).fill(0x141b26);
+      g.roundRect(s / 2 - 6, s - 12, 12, 9, 2).fill(0x5e3e28);
+      g.circle(s / 2, s - 16, 9).fill(0x4ade80);
+      g.circle(s / 2 - 6, s - 12, 6).fill(0x4ade80);
+      g.circle(s / 2 + 6, s - 12, 6).fill(0x4ade80);
+      break;
+    case 'water_cooler':
+      g.rect(0, 0, s, s).fill(0x141b26);
+      g.roundRect(s / 2 - 8, s - 16, 16, 12, 2).fill(0x2a3444).stroke({ width: 1, color: 0x1d2836 });
+      g.roundRect(s / 2 - 6, 6, 12, 14, 3).fill(0x6ea0be);
+      break;
+    case 'printer':
+      g.rect(0, 0, s, s).fill(0x141b26);
+      g.roundRect(4, 8, s - 8, s - 14, 3).fill(0x2a3444).stroke({ width: 1, color: 0x1d2836 });
+      g.rect(8, s / 2 + 2, s - 16, 3).fill(0x0a0e14);
+      g.circle(10, s / 2 + 3, 1.5).fill(0xffb454);
+      break;
+    case 'bookshelf':
+      g.rect(0, 0, s, s).fill(0x141b26);
+      g.roundRect(2, 2, s - 4, s - 4, 2).fill(0x5e3e28);
+      g.rect(4, 5, s - 8, s - 10).fill(0x0e141c);
+      for (let i = 0; i < 5; i++) {
+        const colors = [0x2fe6d2, 0xffb454, 0x8b7cf6, 0xff4d6d, 0x4ade80];
+        g.rect(5 + i * 4, 7, 3, s - 14).fill(colors[i]);
+      }
+      break;
+    case 'rug_eng':
+    case 'rug_design':
+    case 'rug_data':
+    case 'rug_ops': {
+      const rugColors: Record<string, [number, number]> = {
+        rug_eng: [0x102e2c, 0x2fe6d2],
+        rug_design: [0x3a2c14, 0xffb454],
+        rug_data: [0x14261e, 0x4ade80],
+        rug_ops: [0x2e121a, 0xff4d6d],
+      };
+      const [fill, accent] = rugColors[key];
+      g.rect(0, 0, s, s).fill(0x141b26);
+      g.roundRect(1, 1, s - 2, s - 2, 3).fill(fill).stroke({ width: 1.5, color: accent });
+      break;
+    }
   }
   return g;
 }

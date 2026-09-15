@@ -29,8 +29,10 @@ etc.) as long as it matches the spec below exactly.
 
 - Same export format as above.
 - Tile size: 32×32px.
-- Required tile keys (must match exactly — see `TileKey` in `assets.ts`): `floor_a`, `floor_b`, `wall_edge`, `desk`, `review_table`, `nova_office`.
+- Required tile keys (must match exactly — see `TileKey` in `assets.ts`): `floor_a`, `floor_b`, `wall_edge`, `wall_inner`, `window`, `desk`, `review_table`, `nova_office`, `plant`, `water_cooler`, `printer`, `bookshelf`, `rug_eng`, `rug_design`, `rug_data`, `rug_ops`.
 - Tiles are **not** tinted at runtime, so they're authored directly in the app's real design tokens (`shared/src/tokens.ts`) — `desk` carries a cyan monitor glow, `review_table` an amber border, `nova_office` a violet-bordered mat with a small hub glyph — so the floor reads as the same brand as the rest of the UI, not a generic pixel-game tileset.
+- The `rug_*` tiles are laid under each employee's desk keyed by department (`eng`→cyan, `design`→amber, `data`→green, `ops`→magenta — see `DEPT_RUG` in `pixiScene.ts`), so the two desk rows read as distinct team zones without moving anyone's fixed `home_x`/`home_y`.
+- `wall_inner` partitions Nova's desk into its own small enclosed office (walls + a 2-tile door gap, see `NOVA_WALL_*` constants in `pixiScene.ts`); `window` punches a few tiles into the exterior `wall_edge` ring. `plant`/`water_cooler`/`printer`/`bookshelf` are freestanding set-dressing placed in the aisles the desks don't occupy (`DECOR_PROPS` in `pixiScene.ts`).
 
 ## Department badges & status dots
 
