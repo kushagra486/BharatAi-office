@@ -1,4 +1,4 @@
-import type { Escalation, MemoryEntry } from '@bharat-ai-office/shared';
+import type { Escalation, LlmUsageByAgent, MemoryEntry } from '@bharat-ai-office/shared';
 
 export const DAEMON_HTTP_URL = process.env.NEXT_PUBLIC_DAEMON_HTTP_URL ?? 'http://localhost:4317';
 
@@ -31,4 +31,10 @@ export async function searchMemory(query: string): Promise<MemoryEntry[]> {
   const res = await fetch(`${DAEMON_HTTP_URL}/api/memory/search?q=${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error(`daemon returned ${res.status}`);
   return res.json() as Promise<MemoryEntry[]>;
+}
+
+export async function getLlmUsage(): Promise<LlmUsageByAgent> {
+  const res = await fetch(`${DAEMON_HTTP_URL}/api/llm/usage`);
+  if (!res.ok) throw new Error(`daemon returned ${res.status}`);
+  return res.json() as Promise<LlmUsageByAgent>;
 }

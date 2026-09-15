@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useHiveSocket } from '@/hooks/useHiveSocket';
+import { useLlmUsage } from '@/hooks/useLlmUsage';
 import { approveEscalation, denyEscalation, submitBrief } from '@/lib/daemonApi';
 import { HudBar } from '@/components/office/HudBar';
 import { BriefStrip } from '@/components/office/BriefStrip';
@@ -25,6 +26,7 @@ const SESSION_ID = 'OFFICE-001';
 
 export default function Home() {
   const { connected, agents, tasks, messages, escalations, memories, brief, agentOutputByAgent } = useHiveSocket();
+  const usage = useLlmUsage();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [recallOpen, setRecallOpen] = useState(false);
 
@@ -56,7 +58,7 @@ export default function Home() {
           <div className="flex flex-1 flex-col p-4">
             <OfficeFloorPixel agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
           </div>
-          <TeamRoster agents={agents} tasks={tasks} selectedAgentId={selectedAgentId} onSelectAgent={setSelectedAgentId} />
+          <TeamRoster agents={agents} tasks={tasks} usage={usage} selectedAgentId={selectedAgentId} onSelectAgent={setSelectedAgentId} />
         </div>
         <TeamActivity messages={messages} />
       </div>
@@ -72,6 +74,7 @@ export default function Home() {
         tasks={tasks}
         messages={messages}
         terminalBuffer={selectedAgent ? agentOutputByAgent[selectedAgent.id] ?? '' : ''}
+        usage={selectedAgent ? usage[selectedAgent.id] : undefined}
         onClose={() => setSelectedAgentId(null)}
       />
     </main>

@@ -1,10 +1,13 @@
-import type { Agent, Task } from '@bharat-ai-office/shared';
+import type { Agent, LlmUsageByAgent, Task } from '@bharat-ai-office/shared';
 import { STATUS_COLOR } from '@bharat-ai-office/shared';
 import { agentStatus, currentTaskFor, tasksByAgentMap } from '@/lib/agentStatus';
+import { formatTokenCount } from '@/lib/format';
+import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 
 export interface TeamRosterProps {
   agents: Agent[];
   tasks: Task[];
+  usage: LlmUsageByAgent;
   selectedAgentId: string | null;
   onSelectAgent: (agentId: string) => void;
 }
@@ -16,7 +19,17 @@ const STATUS_LABEL: Record<string, string> = {
   idle: 'Idle',
 };
 
-export function TeamRoster({ agents, tasks, selectedAgentId, onSelectAgent }: TeamRosterProps) {
+function TokenBadge({ tokens }: { tokens: number }) {
+  const animated = useAnimatedNumber(tokens);
+  if (tokens === 0) return null;
+  return (
+    <span className="shrink-0 font-mono text-[10px] tabular-nums text-[#6B7686]" title={`${tokens.toLocaleString()} tokens`}>
+      ⚡{formatTokenCount(animated)}
+    </span>
+  );
+}
+
+export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgent }: TeamRosterProps) {
   const tasksByAgent = tasksByAgentMap(tasks);
   const withStatus = agents.map((agent) => ({
     agent,
@@ -25,15 +38,30 @@ export function TeamRoster({ agents, tasks, selectedAgentId, onSelectAgent }: Te
   }));
   const workingCount = withStatus.filter((a) => a.status === 'working').length;
 
+  const totalTokens = Object.values(usage).reduce((sum, u) => sum + u.approxTokens, 0);
+  const totalCalls = Object.values(usage).reduce((sum, u) => sum + u.calls, 0);
+  const byProvider = Object.values(usage).reduce<Record<string, number>>((acc, u) => {
+    acc[u.provider] = (acc[u.provider] ?? 0) + u.approxTokens;
+    return acc;
+  }, {});
+  const animatedTotalTokens = useAnimatedNumber(totalTokens);
+
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-l border-line bg-panel lg:flex">
-      <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
-        <span className="font-mono text-[10px] uppercase tracking-wider text-[#6B7686]">Team ({agents.length})</span>
-        {workingCount > 0 && (
-          <span className="flex items-center gap-1.5 font-mono text-[10px] text-cyan">
-            <span className="h-1.5 w-1.5 rounded-full bg-cyan animate-pulse-dot" />
-            {workingCount} working
-          </span>
+      <div className="border-b border-line px-3 py-2.5">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-[#6B7686]">Team ({agents.length})</span>
+          {workingCount > 0 && (
+            <span className="flex items-center gap-1.5 font-mono text-[10px] text-cyan">
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan animate-pulse-dot" />
+              {workingCount} working
+            </span>
+          )}
+        </div>
+        {totalCalls > 0 && (
+          <div className="mt-1.5 font-mono text-[10px] tabular-nums text-[#6B7686]" title={Object.entries(byProvider).map(([p, t]) => `${p}: ${t.toLocaleString()} tok`).join(' · ')}>
+            ⚡ {formatTokenCount(animatedTotalTokens)} tokens · {totalCalls} calls
+          </div>
         )}
       </div>
       <div className="flex-1 overflow-y-auto">
@@ -57,7 +85,10 @@ export function TeamRoster({ agents, tasks, selectedAgentId, onSelectAgent }: Te
                   {STATUS_LABEL[status]}
                 </span>
               </span>
-              <span className="mt-0.5 block truncate text-[11px] text-[#8B96A5]">{task ? task.title : agent.role}</span>
+              <span className="mt-0.5 flex items-baseline justify-between gap-2">
+                <span className="truncate text-[11px] text-[#8B96A5]">{task ? task.title : agent.role}</span>
+                <TokenBadge tokens={usage[agent.id]?.approxTokens ?? 0} />
+              </span>
             </span>
           </button>
         ))}

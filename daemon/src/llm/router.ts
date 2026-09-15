@@ -1,4 +1,5 @@
 import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
+import type { LlmUsageByAgent, LlmUsageStats } from '@bharat-ai-office/shared';
 import { assignmentFor, type ModelRef } from './assignments';
 import { getClient, isProviderConfigured } from './providers';
 import { acquireSlot, withRetry } from './rateLimiter';
@@ -10,15 +11,7 @@ export interface ChatCompleteParams {
   temperature?: number;
 }
 
-interface UsageStats {
-  provider: string;
-  model: string;
-  calls: number;
-  approxTokens: number;
-  lastCallAt: string | null;
-}
-
-const usageByAgent = new Map<string, UsageStats>();
+const usageByAgent = new Map<string, LlmUsageStats>();
 
 function recordUsage(agentId: string, ref: ModelRef, completion: ChatCompletion) {
   const existing = usageByAgent.get(agentId);
@@ -95,6 +88,6 @@ export async function chatCompleteJson(agentId: string, systemPrompt: string, us
   }
 }
 
-export function getUsage(): Record<string, UsageStats> {
+export function getUsage(): LlmUsageByAgent {
   return Object.fromEntries(usageByAgent);
 }
