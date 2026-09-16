@@ -11,6 +11,7 @@ import { centerOnFloor, topY } from './sceneUtils';
 import {
   BREAK_SPOTS,
   DECOR_SPOTS,
+  documentsSpot,
   GRID_COLS,
   GRID_ROWS,
   NOVA_DOOR_COLS,
@@ -26,12 +27,20 @@ import {
   type WorldPoint,
 } from './layout3d';
 
-const WALK_LEG_MS = 1400;
+// A constant walking pace (world units/ms) rather than a fixed leg duration
+// — the review table and break spots are close enough that a fixed ~1.4s
+// leg read fine, but a colleague on the far side of the room would glide
+// there at the same speed a short hop uses, looking like a teleport rather
+// than a walk. Each leg's duration is now distance/WALK_SPEED instead.
+const WALK_SPEED = 0.003; // ~3 world units/sec
+const MIN_LEG_MS = 500; // floor so adjacent-desk hops don't look instant
 const DWELL_MS = 400;
 const ENVELOPE_FLIGHT_MS = 1600;
 const ROAM_DWELL_MS = 1400;
 const ROAM_MIN_INTERVAL_MS = 4500;
 const ROAM_MAX_INTERVAL_MS = 9000;
+const CHAT_DWELL_MS = 700; // pause at a colleague's desk — a quick face-to-face handoff
+const DOCUMENTS_DWELL_MS = 450; // pause at the bookshelf grabbing documents en route
 
 const WALL_HEIGHT = 2.4;
 const WALL_THICKNESS = 0.12;
@@ -66,12 +75,23 @@ function yawTo(from: WorldPoint, to: WorldPoint): number {
   return Math.atan2(to.x - from.x, to.z - from.z);
 }
 
-interface WalkState {
-  phase: 'toTarget' | 'atTarget' | 'toHome';
-  elapsedMs: number;
-  homePos: WorldPoint;
-  targetPos: WorldPoint;
+function legDuration(from: WorldPoint, to: WorldPoint): number {
+  const distance = Math.hypot(to.x - from.x, to.z - from.z);
+  return Math.max(MIN_LEG_MS, distance / WALK_SPEED);
+}
+
+interface Stop {
+  pos: WorldPoint;
   dwellMs: number;
+}
+
+interface WalkState {
+  phase: 'toStop' | 'atStop' | 'toHome';
+  elapsedMs: number;
+  legMs: number; // duration of the current walking leg (distance-based, see legDuration)
+  fromPos: WorldPoint; // start of the current leg
+  homePos: WorldPoint;
+  stops: Stop[]; // remaining stops to visit, in order, before heading home
   yaw: number;
 }
 
@@ -180,7 +200,22 @@ export class OfficeScene3D {
   }
 
   walkAgentToReviewTable(agentId: string, homePct: PercentPoint): void {
-    this.startWalk(agentId, toWorld(homePct), REVIEW_TABLE_WORLD, DWELL_MS);
+    this.startTrip(agentId, toWorld(homePct), [{ pos: REVIEW_TABLE_WORLD, dwellMs: DWELL_MS }]);
+  }
+
+  /**
+   * Sends the sender physically over to the recipient's desk for a message —
+   * "communicate and work with another co-employee or manager" — instead of
+   * only the abstract flying-dot effect (spawnEnvelope, still fired
+   * alongside this for every message so something always shows even when
+   * the sender is already mid-trip and this call becomes a no-op). Report
+   * messages detour via the bookshelf first — a quick stop standing in for
+   * "needs some documents" before showing up to hand them over.
+   */
+  walkAgentToColleague(fromAgentId: string, fromPct: PercentPoint, toPct: PercentPoint, messageType: MessageType): void {
+    const colleague: Stop = { pos: toWorld(toPct), dwellMs: CHAT_DWELL_MS };
+    const stops: Stop[] = messageType === 'report' ? [{ pos: documentsSpot(), dwellMs: DOCUMENTS_DWELL_MS }, colleague] : [colleague];
+    this.startTrip(fromAgentId, toWorld(fromPct), stops);
   }
 
   spawnEnvelope(fromPct: PercentPoint, toPct: PercentPoint, messageType: MessageType): void {
@@ -470,15 +505,17 @@ export class OfficeScene3D {
 
   // --- per-frame updates --------------------------------------------------
 
-  private startWalk(agentId: string, homePos: WorldPoint, targetPos: WorldPoint, dwellMs: number): void {
-    if (this.walkStates.has(agentId)) return;
+  /** Starts a multi-stop trip: walk to each stop in order (pausing that stop's dwellMs at each), then home. A no-op if the agent is already on a trip, so a new trigger never interrupts one in progress. */
+  private startTrip(agentId: string, homePos: WorldPoint, stops: Stop[]): void {
+    if (this.walkStates.has(agentId) || stops.length === 0) return;
     this.walkStates.set(agentId, {
-      phase: 'toTarget',
+      phase: 'toStop',
       elapsedMs: 0,
+      legMs: legDuration(homePos, stops[0].pos),
+      fromPos: homePos,
       homePos,
-      targetPos,
-      dwellMs,
-      yaw: yawTo(homePos, targetPos),
+      stops,
+      yaw: yawTo(homePos, stops[0].pos),
     });
   }
 
@@ -491,24 +528,34 @@ export class OfficeScene3D {
       }
       state.elapsedMs += deltaMS;
 
-      if (state.phase === 'toTarget') {
-        const t = Math.min(1, state.elapsedMs / WALK_LEG_MS);
-        const pos = lerp(state.homePos, state.targetPos, easeInOut(t));
+      if (state.phase === 'toStop') {
+        const target = state.stops[0].pos;
+        const t = Math.min(1, state.elapsedMs / state.legMs);
+        const pos = lerp(state.fromPos, target, easeInOut(t));
         character.setPosition(pos.x, pos.z);
         character.setFacing(state.yaw);
         if (t >= 1) {
-          state.phase = 'atTarget';
+          state.phase = 'atStop';
           state.elapsedMs = 0;
         }
-      } else if (state.phase === 'atTarget') {
-        if (state.elapsedMs >= state.dwellMs) {
-          state.phase = 'toHome';
+      } else if (state.phase === 'atStop') {
+        if (state.elapsedMs >= state.stops[0].dwellMs) {
+          const justVisited = state.stops.shift()!.pos;
+          state.fromPos = justVisited;
           state.elapsedMs = 0;
-          state.yaw = yawTo(state.targetPos, state.homePos);
+          if (state.stops.length > 0) {
+            state.phase = 'toStop';
+            state.legMs = legDuration(justVisited, state.stops[0].pos);
+            state.yaw = yawTo(justVisited, state.stops[0].pos);
+          } else {
+            state.phase = 'toHome';
+            state.legMs = legDuration(justVisited, state.homePos);
+            state.yaw = yawTo(justVisited, state.homePos);
+          }
         }
       } else {
-        const t = Math.min(1, state.elapsedMs / WALK_LEG_MS);
-        const pos = lerp(state.targetPos, state.homePos, easeInOut(t));
+        const t = Math.min(1, state.elapsedMs / state.legMs);
+        const pos = lerp(state.fromPos, state.homePos, easeInOut(t));
         character.setPosition(pos.x, pos.z);
         character.setFacing(state.yaw);
         if (t >= 1) {
@@ -530,7 +577,7 @@ export class OfficeScene3D {
     if (idleAgents.length === 0) return;
     const agent = idleAgents[Math.floor(Math.random() * idleAgents.length)];
     const spot = BREAK_SPOTS[Math.floor(Math.random() * BREAK_SPOTS.length)];
-    this.startWalk(agent.id, toWorld({ x: agent.home_x, y: agent.home_y }), spot, ROAM_DWELL_MS);
+    this.startTrip(agent.id, toWorld({ x: agent.home_x, y: agent.home_y }), [{ pos: spot, dwellMs: ROAM_DWELL_MS }]);
   }
 
   private tickEnvelopes(deltaMS: number): void {

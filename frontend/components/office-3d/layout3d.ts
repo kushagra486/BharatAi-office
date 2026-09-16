@@ -42,6 +42,16 @@ export function worldToTile(p: WorldPoint): { col: number; row: number } {
 
 export const REVIEW_TABLE_WORLD = toWorld(REVIEW_TABLE_POSITION);
 
+// The nearer bookshelf (printer/scanner/locker/light spots don't apply —
+// this one specifically represents "go get documents") — used by
+// OfficeScene3D's message-driven walks. Derived from DECOR_SPOTS below
+// rather than a second hardcoded position, so moving the bookshelf moves
+// this too.
+export function documentsSpot(): WorldPoint {
+  const shelf = DECOR_SPOTS.find((d) => d.libraryId === 'bookcaseOpen')!;
+  return tileToWorld(shelf.col, shelf.row);
+}
+
 // Department -> rug tint under each desk cluster (see OfficeScene3D's
 // buildDeskCluster) — pastel accents matching the warm retro palette
 // (ASSETS.md), applied as a material color override on a cloned

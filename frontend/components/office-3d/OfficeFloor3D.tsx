@@ -128,7 +128,14 @@ export function OfficeFloor3D({ agents, tasks, messages, onSelectAgent }: Office
       seenMessageIds.current.add(m.id);
       const from = agents.find((a) => a.id === m.from_agent);
       const to = agents.find((a) => a.id === m.to_agent);
-      if (from && to) scene.spawnEnvelope({ x: from.home_x, y: from.home_y }, { x: to.home_x, y: to.home_y }, m.type);
+      if (from && to) {
+        scene.spawnEnvelope({ x: from.home_x, y: from.home_y }, { x: to.home_x, y: to.home_y }, m.type);
+        // The sender physically walks over to the recipient — communicating
+        // with a co-employee/manager, detouring for documents on a report.
+        // A no-op if the sender's already mid-trip (see startTrip), so this
+        // never fights the review-table walk or a break roam.
+        scene.walkAgentToColleague(from.id, { x: from.home_x, y: from.home_y }, { x: to.home_x, y: to.home_y }, m.type);
+      }
     }
   }, [ready, agents, tasks, messages]);
 
