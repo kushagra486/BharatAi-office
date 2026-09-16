@@ -17,4 +17,8 @@ export const env = {
   // per-provider rate limiter — this bounds total concurrency regardless of
   // which providers the active agents happen to be assigned to.
   MAX_CONCURRENT_SESSIONS: Number(process.env.MAX_CONCURRENT_SESSIONS ?? 4),
+  // Optional shared login password (see auth/auth.ts). Empty = no login
+  // screen, matching today's behavior — set this if the daemon is reachable
+  // on a network, not just localhost.
+  APP_PASSWORD: process.env.APP_PASSWORD ?? '',
 };

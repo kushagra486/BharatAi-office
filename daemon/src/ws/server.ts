@@ -4,6 +4,13 @@ import type { HiveEvent } from '@bharat-ai-office/shared';
 import * as hive from '../hive/hive';
 import { hiveEvents } from '../hive/hive';
 import { agentEvents, type AgentExitEvent, type AgentOutputEvent } from '../agents/AgentRunner';
+import { isValidToken } from '../auth/auth';
+
+// A WS upgrade request has no Authorization header support in the browser
+// WebSocket API, so the token rides along as a query param instead
+// (useHiveSocket.ts appends it) — same session token the HTTP API's
+// Authorization: Bearer header carries.
+const UNAUTHORIZED_CLOSE_CODE = 4001;
 
 // Broadcasts every Hive write (hiveEvents bus) plus each employee's live
 // tool-use output/exit (agentEvents bus, for the employee side panel's
@@ -24,7 +31,13 @@ export function attachWebSocketServer(httpServer: HttpServer): WebSocketServer {
     }
   }
 
-  wss.on('connection', (socket) => {
+  wss.on('connection', (socket, request) => {
+    const token = new URL(request.url ?? '', 'http://internal').searchParams.get('token');
+    if (!isValidToken(token)) {
+      socket.close(UNAUTHORIZED_CLOSE_CODE, 'unauthorized');
+      return;
+    }
+
     send(socket, {
       type: 'snapshot',
       payload: {

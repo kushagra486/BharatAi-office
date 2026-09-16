@@ -1,8 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useClock } from '@/hooks/useClock';
+import { getToken } from '@/lib/authToken';
+import { logout } from '@/lib/daemonApi';
 
 export interface HudBarProps {
   sessionId: string;
@@ -39,6 +42,25 @@ function SiteNav() {
         );
       })}
     </nav>
+  );
+}
+
+// Only rendered once we know there's actually a session token to log out
+// of — otherwise (no APP_PASSWORD configured) a "Logout" button would be
+// confusing chrome with nothing behind it.
+function LogoutButton() {
+  const [hasToken, setHasToken] = useState(false);
+  useEffect(() => setHasToken(Boolean(getToken())), []);
+  if (!hasToken) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => logout().finally(() => (window.location.href = '/login'))}
+      className="rounded border border-line px-2 py-1 uppercase tracking-wide text-[#6B7686] transition-all duration-200 hover:border-magenta hover:text-magenta active:scale-95"
+    >
+      Logout
+    </button>
   );
 }
 
@@ -115,6 +137,7 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
             )}
           </button>
         )}
+        <LogoutButton />
       </div>
     </header>
   );

@@ -2,6 +2,7 @@
 
 import { useHiveSocket } from '@/hooks/useHiveSocket';
 import { useLlmUsage } from '@/hooks/useLlmUsage';
+import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { HudBar } from '@/components/office/HudBar';
 import { DashboardStatTiles } from '@/components/dashboard/DashboardStatTiles';
 import { MeetingSummaryBoard } from '@/components/dashboard/MeetingSummaryBoard';
@@ -14,8 +15,11 @@ import { AgentRosterGrid } from '@/components/dashboard/AgentRosterGrid';
 const SESSION_ID = 'OFFICE-001';
 
 export default function DashboardPage() {
+  const { ready } = useAuthGuard();
   const { connected, agents, tasks, messages, brief } = useHiveSocket();
   const usage = useLlmUsage();
+
+  if (!ready) return null;
 
   return (
     <main className="flex min-h-screen flex-col bg-void">

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useHiveSocket } from '@/hooks/useHiveSocket';
 import { useLlmUsage } from '@/hooks/useLlmUsage';
+import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { approveEscalation, denyEscalation, submitBrief } from '@/lib/daemonApi';
 import { HudBar } from '@/components/office/HudBar';
 import { BriefStrip } from '@/components/office/BriefStrip';
@@ -23,6 +24,7 @@ const OfficeFloor3D = dynamic(() => import('@/components/office-3d/OfficeFloor3D
 const SESSION_ID = 'OFFICE-001';
 
 export default function Home() {
+  const { ready } = useAuthGuard();
   const { connected, agents, tasks, messages, escalations, memories, brief, agentOutputByAgent } = useHiveSocket();
   const usage = useLlmUsage();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -39,6 +41,8 @@ export default function Home() {
   function handleDeny(id: number) {
     denyEscalation(id).catch((err) => console.error('failed to deny escalation', id, err));
   }
+
+  if (!ready) return null;
 
   return (
     <main className="flex min-h-screen flex-col bg-void">

@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Agent, BriefRecord, Escalation, HiveEvent, HiveMessage, MemoryEntry, Task } from '@bharat-ai-office/shared';
+import { clearToken, getToken } from '@/lib/authToken';
 
 export const DAEMON_WS_URL = process.env.NEXT_PUBLIC_DAEMON_WS_URL ?? 'ws://localhost:4317/ws';
+
+// The daemon rejects the WS upgrade with this code when a login is
+// required and the token (passed as a query param — the browser
+// WebSocket API can't set custom headers) is missing/expired.
+const UNAUTHORIZED_CLOSE_CODE = 4001;
 
 export interface HiveSocketState {
   connected: boolean;
@@ -84,7 +90,9 @@ export function useHiveSocket(): HiveSocketState {
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
     function connect() {
-      const socket = new WebSocket(DAEMON_WS_URL);
+      const token = getToken();
+      const url = token ? `${DAEMON_WS_URL}?token=${encodeURIComponent(token)}` : DAEMON_WS_URL;
+      const socket = new WebSocket(url);
       socketRef.current = socket;
 
       socket.onmessage = (raw) => {
@@ -96,8 +104,13 @@ export function useHiveSocket(): HiveSocketState {
         }
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         setState((prev) => ({ ...prev, connected: false }));
+        if (event.code === UNAUTHORIZED_CLOSE_CODE) {
+          clearToken();
+          if (!cancelled && window.location.pathname !== '/login') window.location.href = '/login';
+          return; // don't keep retrying with a token that was just rejected
+        }
         if (!cancelled) reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
       };
 
