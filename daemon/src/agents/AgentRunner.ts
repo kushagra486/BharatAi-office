@@ -52,10 +52,21 @@ class AgentRunner {
     return this.running.has(agentId);
   }
 
+  activeCount(): number {
+    return this.running.size;
+  }
+
+  atCapacity(): boolean {
+    return this.running.size >= env.MAX_CONCURRENT_SESSIONS;
+  }
+
   /** Starts the tool-use loop for `agentId` working `taskId`. Returns immediately; the loop runs async. */
   startTask(agentId: string, taskId: string): { agentId: string; taskId: string } {
     if (this.running.has(agentId)) {
       throw new Error(`agent ${agentId} already has a running task`);
+    }
+    if (this.atCapacity()) {
+      throw new Error(`at MAX_CONCURRENT_SESSIONS (${env.MAX_CONCURRENT_SESSIONS}) — task stays idle until a slot frees up`);
     }
     const agent = ROSTER.find((a) => a.id === agentId);
     if (!agent) throw new Error(`unknown agent: ${agentId}`);

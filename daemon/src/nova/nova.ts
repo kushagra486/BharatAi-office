@@ -136,6 +136,7 @@ function dispatchReadyTasks(): void {
   const tasks = hive.listTasks();
   const tasksById = new Map(tasks.map((t) => [t.id, t]));
   for (const task of tasks) {
+    if (agentRunner.atCapacity()) break; // hard cap (env.MAX_CONCURRENT_SESSIONS) — remaining ready tasks wait for a slot
     if (!isReady(task, tasksById)) continue;
     if (agentRunner.isBusy(task.agent_id)) continue;
     try {
