@@ -6,6 +6,7 @@ import type { Office3DAssets } from './assets3d';
 import { cloneWithMaterials } from './assets3d';
 import { CharacterEntity } from './CharacterEntity';
 import { dotTexture } from './badgeTextures';
+import { findProp, type LibraryProp } from './propLibrary';
 import { centerOnFloor, topY } from './sceneUtils';
 import {
   BREAK_SPOTS,
@@ -397,44 +398,9 @@ export class OfficeScene3D {
 
   private buildDecor(): void {
     for (const spot of DECOR_SPOTS) {
-      const pos = tileToWorld(spot.col, spot.row);
-      const group = new THREE.Group();
-      group.position.set(pos.x, 0, pos.z);
-      this.scene.add(group);
-
-      switch (spot.kind) {
-        case 'pottedPlant':
-        case 'plantSmall1':
-        case 'plantSmall2': {
-          const plant = centerOnFloor(cloneWithMaterials(this.assets.props[spot.kind]), PROP_SCALE * 1.4);
-          group.add(plant);
-          break;
-        }
-        case 'coffeeStation': {
-          const table = centerOnFloor(cloneWithMaterials(this.assets.props.sideTable), PROP_SCALE);
-          group.add(table);
-          const machine = centerOnFloor(cloneWithMaterials(this.assets.props.kitchenCoffeeMachine), PROP_SCALE);
-          machine.position.y = topY(table);
-          group.add(machine);
-          break;
-        }
-        case 'lampRoundFloor': {
-          const lamp = centerOnFloor(cloneWithMaterials(this.assets.props.lampRoundFloor), PROP_SCALE);
-          group.add(lamp);
-          const trash = centerOnFloor(cloneWithMaterials(this.assets.props.trashcan), PROP_SCALE);
-          trash.position.x = 0.4 * PROP_SCALE;
-          group.add(trash);
-          break;
-        }
-        case 'bookshelf': {
-          const shelf = centerOnFloor(cloneWithMaterials(this.assets.props.bookcaseOpen), PROP_SCALE);
-          group.add(shelf);
-          const books = centerOnFloor(cloneWithMaterials(this.assets.props.books), PROP_SCALE);
-          books.position.set(0.35 * PROP_SCALE, 0, 0.15 * PROP_SCALE);
-          group.add(books);
-          break;
-        }
-      }
+      const entry = findProp(spot.libraryId);
+      if (!entry) continue; // library entry removed/renamed without updating DECOR_SPOTS — skip rather than crash
+      this.placeLibraryProp(entry, tileToWorld(spot.col, spot.row));
     }
 
     // Nova's ambient glow — a soft gold disc + a matching pulsing point light,
@@ -455,6 +421,31 @@ export class OfficeScene3D {
       light.position.set(pos.x, 2.2, pos.z);
       this.scene.add(light);
       this.novaLight = light;
+    }
+  }
+
+  /** Places one prop-library entry (propLibrary.ts) at a world position — reads `standOn`/`companion` generically so adding a new library item never needs a new case here. */
+  private placeLibraryProp(entry: LibraryProp, pos: WorldPoint): void {
+    const group = new THREE.Group();
+    group.position.set(pos.x, 0, pos.z);
+    this.scene.add(group);
+
+    let restingY = 0;
+    if (entry.standOn) {
+      const stand = centerOnFloor(cloneWithMaterials(this.assets.props[entry.standOn]), PROP_SCALE);
+      group.add(stand);
+      restingY = topY(stand);
+    }
+
+    const main = centerOnFloor(cloneWithMaterials(this.assets.props[entry.id]), PROP_SCALE * (entry.scaleMultiplier ?? 1));
+    main.position.y = restingY;
+    group.add(main);
+
+    if (entry.companion) {
+      const companion = centerOnFloor(cloneWithMaterials(this.assets.props[entry.companion]), PROP_SCALE);
+      const offset = entry.companionOffset ?? { x: 0.35, z: 0.15 };
+      companion.position.set(offset.x * PROP_SCALE, 0, offset.z * PROP_SCALE);
+      group.add(companion);
     }
   }
 

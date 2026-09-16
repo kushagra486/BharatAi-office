@@ -1,5 +1,6 @@
 import type { Agent } from '@bharat-ai-office/shared';
 import { REVIEW_TABLE_POSITION } from '@bharat-ai-office/shared';
+import { PROP_LIBRARY } from './propLibrary';
 
 // World scale: 1 unit = 1 floor tile = 1 meter, matching the native scale of
 // the Kenney Furniture Kit models (desk/wall/floor are all authored at
@@ -63,37 +64,40 @@ export const NOVA_DOOR_COLS = new Set([15, 16]);
 // Windows punched into the back exterior wall (row 0).
 export const WINDOW_COLS = new Set([3, 7, 22, 26]);
 
-export type PropKind =
-  | 'pottedPlant'
-  | 'plantSmall1'
-  | 'plantSmall2'
-  | 'coffeeStation'
-  | 'lampRoundFloor'
-  | 'bookshelf';
-
 export interface DecorSpot {
   col: number;
   row: number;
-  kind: PropKind;
+  /** A PROP_LIBRARY entry id (propLibrary.ts) — add a model there to make new spots/kinds available here. */
+  libraryId: string;
 }
 
 // Fixed set-dressing placed in the aisles/corners the desks don't occupy —
-// same spots the 2D scene used, now furnished with real CC0 3D models
-// instead of procedural pixel-art tiles (see props/SOURCE-README.md):
-// potted plants, a coffee station (sideTable + kitchenCoffeeMachine — the
-// "coffee machine" the office needed), a reading-lamp corner, and two
-// bookshelves (bookcaseOpen + books).
+// every item here comes from the extensible prop library (propLibrary.ts),
+// furnished with real CC0 3D models (see props/SOURCE-README.md). Add a row
+// here (and an entry to PROP_LIBRARY) to place something new — nothing else
+// needs to change.
 export const DECOR_SPOTS: DecorSpot[] = [
-  { col: 2, row: 2, kind: 'pottedPlant' },
-  { col: 27, row: 2, kind: 'plantSmall1' },
-  { col: 15, row: 14, kind: 'plantSmall2' },
-  { col: 2, row: 8, kind: 'coffeeStation' },
-  { col: 27, row: 8, kind: 'lampRoundFloor' },
-  { col: 2, row: 13, kind: 'bookshelf' },
-  { col: 27, row: 13, kind: 'bookshelf' },
+  { col: 2, row: 2, libraryId: 'pottedPlant' },
+  { col: 27, row: 2, libraryId: 'plantSmall1' },
+  { col: 15, row: 14, libraryId: 'plantSmall2' },
+  { col: 2, row: 8, libraryId: 'kitchenCoffeeMachine' },
+  { col: 27, row: 8, libraryId: 'lampRoundFloor' },
+  { col: 2, row: 13, libraryId: 'bookcaseOpen' },
+  { col: 27, row: 13, libraryId: 'bookcaseOpen' },
+  { col: 8, row: 7, libraryId: 'kitchenMicrowave' }, // "Printer" — see propLibrary.ts
+  { col: 22, row: 7, libraryId: 'toaster' }, // "Scanner" — see propLibrary.ts
+  { col: 8, row: 13, libraryId: 'cabinetBed' }, // "Locker"
+  { col: 22, row: 13, libraryId: 'cabinetBed' }, // "Locker"
+  { col: 5, row: 1, libraryId: 'lampWall' },
+  { col: 24, row: 1, libraryId: 'lampWall' },
 ];
 
-export const BREAK_SPOTS: WorldPoint[] = DECOR_SPOTS.map((d) => tileToWorld(d.col, d.row));
+// Only spots an agent would plausibly walk over to use (coffee, printer,
+// scanner) are break-roam targets — pure decor (plants, lockers, lights)
+// isn't, per each entry's `roamable` flag in propLibrary.ts.
+export const BREAK_SPOTS: WorldPoint[] = DECOR_SPOTS.filter(
+  (d) => PROP_LIBRARY.find((p) => p.id === d.libraryId)?.roamable
+).map((d) => tileToWorld(d.col, d.row));
 
 /** Department -> which rug color sits under an employee's desk cluster (Nova gets the gold office treatment instead, handled separately). */
 export function rugColorFor(agent: Agent): number | null {
