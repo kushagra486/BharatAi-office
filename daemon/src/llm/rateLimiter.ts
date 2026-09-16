@@ -1,53 +1,86 @@
 import type { ProviderId } from './providers';
 
-// Conservative starting RPM defaults per provider's free tier. These are
-// not published guarantees — tune them against what you actually observe
-// (a 429 from the provider is the real signal; this limiter just tries to
-// avoid triggering one under normal concurrent load from the 11 seats
-// sharing each provider).
+// Per-provider RPM budgets — keyed by provider (the API key), not by model.
+// Verified against each provider's published/reported limits (Sep 2026):
+// Groq's free tier is "rate-limited... at the organization level" (one
+// shared 30 RPM budget per key, not per model); NVIDIA NIM defaults to
+// 40 RPM per tracked key; OpenRouter hard-caps ":free" models at 20 RPM.
+// These are account-level ceilings shared across every model called with
+// that key — and several of our agents share a provider under *different*
+// model names (see assignments.ts), so bucketing per model instead of per
+// provider let concurrent agents blow well past the real ceiling. Numbers
+// below stay conservatively under each published default; they still drift
+// and aren't guaranteed, so treat them as starting points to tune against
+// real 429s, not promises.
 const RPM_LIMITS: Record<ProviderId, number> = {
-  nvidia: 35,
-  groq: 28,
-  openrouter: 18,
+  nvidia: 30,
+  groq: 24,
+  openrouter: 15,
 };
 
+// OpenRouter's free-model daily ceiling (50 requests/day until $10 of
+// credit has ever been purchased) is low enough that per-minute limiting
+// alone won't catch it — a single busy session can exhaust it in a few
+// minutes. Groq's daily cap (14,400/day) and NVIDIA's (not published) are
+// generous enough not to need day-tracking yet.
+const RPD_LIMITS: Partial<Record<ProviderId, number>> = {
+  openrouter: 45,
+};
+
+const DAY_MS = 24 * 60 * 60_000;
 const RETRY_BASE_MS = 500;
 const MAX_RETRIES = 3;
 
-interface Bucket {
-  windowStart: number;
+interface Window {
+  start: number;
   count: number;
 }
 
-const buckets = new Map<string, Bucket>();
+const minuteBuckets = new Map<ProviderId, Window>();
+const dayBuckets = new Map<ProviderId, Window>();
 
-function bucketKey(provider: ProviderId, model: string): string {
-  return `${provider}:${model}`;
+/** Returns the current count in `provider`'s window, resetting it first if it has rolled over. */
+function currentCount(buckets: Map<ProviderId, Window>, provider: ProviderId, windowMs: number, now: number): number {
+  const bucket = buckets.get(provider);
+  if (!bucket || now - bucket.start >= windowMs) {
+    buckets.set(provider, { start: now, count: 0 });
+    return 0;
+  }
+  return bucket.count;
+}
+
+function commit(buckets: Map<ProviderId, Window>, provider: ProviderId): void {
+  buckets.get(provider)!.count += 1;
+}
+
+function waitMsFor(buckets: Map<ProviderId, Window>, provider: ProviderId, windowMs: number, now: number): number {
+  const bucket = buckets.get(provider)!;
+  return windowMs - (now - bucket.start) + 50;
 }
 
 /**
- * Sliding 60s window limiter. Resolves immediately if under the provider's
- * budget, otherwise waits until the window rolls over. Hand-rolled — no new
- * dependency needed for something this small.
+ * Enforces both the per-minute and (where set) per-day provider budgets
+ * before letting a call through, queuing until a slot opens rather than
+ * rejecting. `model` is accepted for call-site symmetry/future logging but
+ * doesn't key the bucket — see the RPM_LIMITS comment above for why.
  */
-export async function acquireSlot(provider: ProviderId, model: string): Promise<void> {
-  const key = bucketKey(provider, model);
-  const limit = RPM_LIMITS[provider];
-  const windowMs = 60_000;
+export async function acquireSlot(provider: ProviderId, _model: string): Promise<void> {
+  const minuteLimit = RPM_LIMITS[provider];
+  const dayLimit = RPD_LIMITS[provider];
 
   for (;;) {
     const now = Date.now();
-    let bucket = buckets.get(key);
-    if (!bucket || now - bucket.windowStart >= windowMs) {
-      bucket = { windowStart: now, count: 0 };
-      buckets.set(key, bucket);
+    if (currentCount(minuteBuckets, provider, 60_000, now) >= minuteLimit) {
+      await sleep(waitMsFor(minuteBuckets, provider, 60_000, now));
+      continue;
     }
-    if (bucket.count < limit) {
-      bucket.count += 1;
-      return;
+    if (dayLimit !== undefined && currentCount(dayBuckets, provider, DAY_MS, now) >= dayLimit) {
+      await sleep(waitMsFor(dayBuckets, provider, DAY_MS, now));
+      continue;
     }
-    const waitMs = windowMs - (now - bucket.windowStart) + 50;
-    await sleep(waitMs);
+    commit(minuteBuckets, provider);
+    if (dayLimit !== undefined) commit(dayBuckets, provider);
+    return;
   }
 }
 
