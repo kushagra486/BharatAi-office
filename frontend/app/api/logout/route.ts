@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@bharat-ai-office/shared';
+import { auth } from '@bharat-ai-office/shared/server';
 
 export async function POST(request: Request) {
   const header = request.headers.get('authorization');

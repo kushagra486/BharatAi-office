@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { nova } from '@bharat-ai-office/shared';
+import { nova } from '@bharat-ai-office/shared/server';
 import { requireAuth } from '@/lib/apiAuth';
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {

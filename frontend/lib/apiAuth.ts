@@ -1,4 +1,4 @@
-import { auth } from '@bharat-ai-office/shared';
+import { auth } from '@bharat-ai-office/shared/server';
 import { NextResponse } from 'next/server';
 
 // The old Fastify daemon had one global onRequest hook gating every route.

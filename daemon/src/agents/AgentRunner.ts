@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { Agent, Task } from '@bharat-ai-office/shared';
-import { llmRouter, supabaseHive as hive } from '@bharat-ai-office/shared';
+import { llmRouter, supabaseHive as hive } from '@bharat-ai-office/shared/server';
 import { env } from '../env';
 import { commitAgentWork } from '../git/gitModule';
 import { publishAgentEvent } from '../realtimeBroadcast';

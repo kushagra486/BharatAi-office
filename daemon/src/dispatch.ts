@@ -1,5 +1,6 @@
 import type { Task } from '@bharat-ai-office/shared';
-import { ROSTER, supabaseHive as hive } from '@bharat-ai-office/shared';
+import { ROSTER } from '@bharat-ai-office/shared';
+import { supabaseHive as hive } from '@bharat-ai-office/shared/server';
 import { agentRunner } from './agents/AgentRunner';
 import { env } from './env';
 

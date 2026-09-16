@@ -1,4 +1,4 @@
-import { supabaseHive } from '@bharat-ai-office/shared';
+import { supabaseHive } from '@bharat-ai-office/shared/server';
 
 // The employee side panel's live terminal feed (AgentRunner's output/exit
 // events) rides a Supabase Realtime *broadcast* channel rather than a

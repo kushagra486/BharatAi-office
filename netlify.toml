@@ -1,0 +1,16 @@
+[build]
+  base = "frontend"
+  # The Next.js app depends on the shared workspace's compiled dist/ output
+  # (see shared/package.json's main/types fields), so that has to be built
+  # from the monorepo root before `next build` runs from frontend/.
+  command = "cd .. && npm run build --workspace shared && cd frontend && npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  # Nova's periodic reasoning (netlify/functions/nova-tick.mts) — the only
+  # hand-written function here; API routes under app/api/** are handled by
+  # the Next.js runtime plugin above, not this directory.
+  directory = "netlify/functions"

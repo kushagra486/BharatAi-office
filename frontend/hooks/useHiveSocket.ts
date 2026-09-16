@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Agent, Escalation, HiveMessage, Task } from '@bharat-ai-office/shared';
 import { getAuthStatus, getBrief, listAgents, listEscalations, listMessages, listTasks } from '@/lib/daemonApi';
 import { getToken } from '@/lib/authToken';
-import { supabase } from '@/lib/supabaseClient';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
 export interface HiveSocketState {
   connected: boolean;
@@ -76,6 +76,7 @@ export function useHiveSocket(): HiveSocketState {
       }
     })();
 
+    const supabase = getSupabaseClient();
     const channel = supabase
       .channel('hive-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
