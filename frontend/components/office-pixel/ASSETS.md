@@ -44,6 +44,33 @@ agent's identity color (`TOKEN_TINT[agent.color]`) even when that agent is
 using a custom per-agent sprite (see below), so shape + color stay
 meaningful regardless of art source.
 
+## Character mapping
+
+The 11 roster ids (`shared/src/roster.ts`), with the identity each one
+currently renders as — this is the full "who is who" reference for naming
+custom sprite files (§ below) and for prompting/briefing an artist per
+agent.
+
+| Agent id | Name | Role | Department | Badge shape | Current color |
+|---|---|---|---|---|---|
+| `nova` | Nova | Orchestrator | orchestrator | octagon | violet `#8B7CF6` |
+| `kael` | Kael | Solutions Architect | eng | hexagon | red `#FF4D4D` |
+| `priya` | Priya | Backend Developer | eng | hexagon | orange `#FF9433` |
+| `devraj` | Devraj | Frontend Developer | eng | hexagon | gold `#FFD23F` |
+| `simran` | Simran | UI/UX Designer | design | diamond | lime `#A8E62E` |
+| `arjun` | Arjun | QA Engineer | eng | hexagon | emerald `#2ECC71` |
+| `meera` | Meera | Data/Analytics | data | circle | cyan `#2FE6D2` |
+| `raghav` | Raghav | Security Reviewer | eng | hexagon | sky blue `#38BDF8` |
+| `tanya` | Tanya | Technical Writer | data | circle | blue `#5B7FFF` |
+| `farhan` | Farhan | DevOps Engineer | ops | rounded square | pink `#FF4FC3` |
+| `isha` | Isha | Project Coordinator | ops | rounded square | rose `#FF4D79` |
+
+The "current color" is only used when an agent has **no** custom sprite
+(the shared rig tinted via `.tint`) — a custom per-agent sheet renders in
+whatever colors are actually in its PNG, so it doesn't need to match this
+column at all. Badge shape (department marker, drawn separately — see
+below) always stays regardless of sprite source.
+
 ## Per-agent custom sprites (real photos / custom art per employee)
 
 By default all 11 agents share the one grayscale rig above, recolored per
