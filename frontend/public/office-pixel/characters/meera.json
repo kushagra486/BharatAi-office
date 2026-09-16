@@ -482,7 +482,7 @@
     }
   },
   "meta": {
-    "app": "Bharat AI Office Pixel custom agent asset pack",
+    "app": "generate-agent-sprites.py",
     "image": "meera.png",
     "format": "RGBA8888",
     "size": {
