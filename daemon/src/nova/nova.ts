@@ -40,7 +40,10 @@ ${roster}
 
 Decompose this brief into a task graph. Respond with strict JSON only, no
 prose, matching this shape:
-{ "tasks": [ { "id": string, "agentId": string, "title": string, "description": string, "dependsOn": string[] } ] }
+{ "reasoning": string, "tasks": [ { "id": string, "agentId": string, "title": string, "description": string, "dependsOn": string[] } ] }
+
+"reasoning" comes first: briefly think through what the brief actually
+needs and how to split it before listing tasks.
 
 Rules:
 - Task ids are short kebab-case slugs, unique within the graph.
@@ -88,9 +91,11 @@ An employee (agent id: ${message.from_agent}) flagged this while working a task:
 ${message.body}
 """
 
-Respond with strict JSON only: { "escalate": boolean, "reason": string }.
-"reason" is one or two sentences: if escalate is true, explain what needs
-human approval; if false, explain how you're resolving it yourself.`;
+Respond with strict JSON only: { "reasoning": string, "escalate": boolean, "reason": string }.
+"reasoning" comes first — weigh this against the escalation policy in a
+sentence before deciding. "reason" is one or two sentences: if escalate is
+true, explain what needs human approval; if false, explain how you're
+resolving it yourself.`;
 
   let result: TriageResult;
   try {
@@ -175,7 +180,10 @@ ${reportText}
 
 Check these outputs for consistency with the brief, then write the final
 deliverable summary. Respond with strict JSON only:
-{ "consistent": boolean, "summary": string, "concerns": string[] }`;
+{ "reasoning": string, "consistent": boolean, "summary": string, "concerns": string[] }
+
+"reasoning" comes first: briefly check the reports against the brief
+before deciding.`;
 
   let summary = 'QA pass could not run (Groq unreachable).';
   try {

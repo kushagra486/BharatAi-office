@@ -107,6 +107,13 @@ class AgentRunner {
     this.emit(agentId, taskId, `[${agent.name}] starting task "${task.title}"`);
 
     let outcome: Outcome | null = null;
+    // Self-Refine / Reflexion-lite (Madaan et al. 2023 / Shinn et al. 2023;
+    // open, model-agnostic techniques): don't finalize on the *first*
+    // mark_task_done — ask the model to re-check its own work once, then
+    // finalize on the next mark_task_done. Bounded to exactly one extra
+    // turn (this flips true and never back), so it can't loop forever; the
+    // existing MAX_TURNS/WALL_CLOCK_LIMIT caps still bound the worst case.
+    let verificationRequested = false;
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (state.cancelled) return;
@@ -146,9 +153,22 @@ class AgentRunner {
       for (const toolCall of message.tool_calls) {
         const result = await executeToolCall(workdir, toolCall);
         if (result.kind === 'done') {
-          this.emit(agentId, taskId, `✓ mark_task_done: ${result.summary}`);
-          outcome = { kind: 'done', summary: result.summary };
-          stop = true;
+          if (!verificationRequested) {
+            verificationRequested = true;
+            this.emit(agentId, taskId, `… verifying: "${result.summary}"`);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content:
+                'Before this is finalized: briefly re-check that summary against the task description above. ' +
+                'If it fully satisfies the task, call mark_task_done again to confirm as-is. If you spot a real ' +
+                'gap, fix it first with your tools, then call mark_task_done when actually done.',
+            });
+          } else {
+            this.emit(agentId, taskId, `✓ mark_task_done (confirmed): ${result.summary}`);
+            outcome = { kind: 'done', summary: result.summary };
+            stop = true;
+          }
         } else if (result.kind === 'escalate') {
           this.emit(agentId, taskId, `⚑ escalate: ${result.reason}`);
           outcome = { kind: 'escalate', reason: result.reason };
