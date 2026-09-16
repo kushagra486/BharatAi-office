@@ -1,9 +1,9 @@
 import type { Agent, LlmUsageByAgent, Task } from '@bharat-ai-office/shared';
-import { STATUS_COLOR } from '@bharat-ai-office/shared';
 import { agentStatus, currentTaskFor, tasksByAgentMap } from '@/lib/agentStatus';
 import { formatTokenCount } from '@/lib/format';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { useTokenHistory } from '@/hooks/useTokenHistory';
+import { AgentAvatar } from './AgentAvatar';
 import { TokenSparkline } from './TokenSparkline';
 
 export interface TeamRosterProps {
@@ -83,12 +83,7 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
               selectedAgentId === agent.id ? 'bg-line/30' : ''
             }`}
           >
-            <span
-              className={`mt-1 h-2 w-2 shrink-0 rounded-full transition-shadow ${
-                status === 'working' || status === 'blocked' ? 'animate-pulse-dot' : ''
-              }`}
-              style={{ backgroundColor: STATUS_COLOR[status], boxShadow: status === 'working' || status === 'blocked' ? `0 0 6px ${STATUS_COLOR[status]}` : undefined }}
-            />
+            <AgentAvatar agent={agent} status={status} size={30} />
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline justify-between gap-2">
                 <span className="truncate font-mono text-xs font-semibold text-[#E6EDF3]">{agent.name}</span>

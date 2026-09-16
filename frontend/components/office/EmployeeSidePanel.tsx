@@ -1,6 +1,8 @@
 import type { Agent, HiveMessage, LlmUsageStats, Task } from '@bharat-ai-office/shared';
+import { agentStatus, tasksByAgentMap } from '@/lib/agentStatus';
 import { formatRelativeTime, formatTokenCount } from '@/lib/format';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
+import { AgentAvatar } from './AgentAvatar';
 
 export interface EmployeeSidePanelProps {
   agent: Agent | null;
@@ -43,6 +45,7 @@ export function EmployeeSidePanel({ agent, tasks, messages, terminalBuffer, usag
   const agentTasks = agent ? tasks.filter((t) => t.agent_id === agent.id) : [];
   const currentTask = agentTasks.find((t) => t.status === 'working') ?? agentTasks[agentTasks.length - 1];
   const activity = agent ? messages.filter((m) => m.from_agent === agent.id || m.to_agent === agent.id).slice(0, 30) : [];
+  const status = agent ? (agent.id === 'nova' ? 'idle' : agentStatus(agent.id, tasksByAgentMap(tasks))) : 'idle';
 
   return (
     <div
@@ -54,9 +57,12 @@ export function EmployeeSidePanel({ agent, tasks, messages, terminalBuffer, usag
       {agent && (
         <>
           <div className="flex items-center justify-between border-b border-line p-4">
-            <div>
-              <h2 className="font-mono text-sm uppercase tracking-wide text-[#E6EDF3]">{agent.name}</h2>
-              <p className="font-mono text-[11px] text-[#6B7686]">{agent.role}</p>
+            <div className="flex items-center gap-3">
+              <AgentAvatar agent={agent} status={status} size={44} />
+              <div>
+                <h2 className="font-mono text-sm uppercase tracking-wide text-[#E6EDF3]">{agent.name}</h2>
+                <p className="font-mono text-[11px] text-[#6B7686]">{agent.role}</p>
+              </div>
             </div>
             <button type="button" onClick={onClose} className="font-mono text-xs text-[#6B7686] hover:text-cyan">
               ✕

@@ -115,11 +115,24 @@ frontend/public/office-pixel/characters/<agentId>.png
   glance rather than one shape recolored 11 times. `AGENTS` in that script
   is the place to swap in a new accessory function per agent or add more.
 
+## Dashboard profile photos (separate from the floor sprites)
+
+`frontend/public/office-pixel/portraits/<agentId>.png` — a real photo/portrait
+shown as a circular avatar in `TeamRoster` and `EmployeeSidePanel`
+(`AgentAvatar.tsx`), independent of the floor's walking sprite. This is a
+plain square image, not a 24-frame atlas — one file per agent, any
+reasonable size (the current set is 128×128). `AgentAvatar` falls back to
+an initial-letter badge in the agent's identity color
+(`frontend/lib/agentColor.ts`) if `<agentId>.png` 404s, so an agent
+without a portrait yet (e.g. `nova`, pending the correct source image) just
+shows the badge instead of a broken image icon — no code change needed to
+add one later.
+
 ## Full asset inventory
 
-Everything that can currently be visually replaced in the office scene —
-nothing else in the app (the surrounding dashboard chrome: HudBar, panels,
-roster, charts) uses image assets, it's all CSS/SVG/text.
+Everything below is the office *floor* scene specifically; the dashboard
+chrome (HudBar, panels, roster, charts) is CSS/SVG/text except for the
+profile photos noted above.
 
 | Key | File | What it is | Where it's used |
 |---|---|---|---|
