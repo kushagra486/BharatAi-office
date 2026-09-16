@@ -1,4 +1,5 @@
 import { Assets, Graphics, Rectangle, type Renderer, type Spritesheet, Texture } from 'pixi.js';
+import { ROSTER } from '@bharat-ai-office/shared';
 
 // The texture-atlas contract every asset source (real hand-drawn art or the
 // procedural placeholder below) must satisfy identically. Downstream code
@@ -53,9 +54,19 @@ const TILE_KEYS: TileKey[] = [
 ];
 
 export interface OfficeAssets {
+  /** Shared fallback rig — grayscale, tinted per agent (see CharacterSprite.ts). Used for any agent without an entry in `characterFramesByAgent`. */
   characterFrames: Record<CharacterFrameKey, Texture>;
+  /**
+   * Optional full-color per-agent override, keyed by roster id (e.g. "kael").
+   * Populated from `/office-pixel/characters/{agentId}.json` when present —
+   * see ASSETS.md "Per-agent custom sprites". An agent with an entry here is
+   * rendered untinted (the sheet is assumed to already be the real color);
+   * an agent without one falls back to the shared grayscale rig + tint.
+   * This is what lets you replace avatars one at a time without redoing all 11.
+   */
+  characterFramesByAgent: Partial<Record<string, Record<CharacterFrameKey, Texture>>>;
   tiles: Record<TileKey, Texture>;
-  /** True when the procedural placeholder was used because no real sheet was found. */
+  /** True when the procedural placeholder was used because no real shared sheet was found. */
   isPlaceholder: boolean;
 }
 
@@ -64,14 +75,34 @@ export interface OfficeAssets {
  * tileset first, falls back to generating a placeholder that satisfies the
  * exact same CharacterFrameKey/TileKey contract. `renderer` is required for
  * the placeholder path (it rasterizes vector Graphics into textures).
+ * Independently, also tries a per-agent custom sheet for each roster id —
+ * each one is optional and fails silently, so this works whether none, some,
+ * or all 11 agents have custom art dropped in.
  */
 export async function loadOfficeAssets(renderer: Renderer): Promise<OfficeAssets> {
-  const real = await tryLoadRealAssets();
-  if (real) return { ...real, isPlaceholder: false };
-  return { ...buildPlaceholderAssets(renderer), isPlaceholder: true };
+  const [real, characterFramesByAgent] = await Promise.all([tryLoadRealAssets(), loadPerAgentSheets()]);
+  const base = real ?? buildPlaceholderAssets(renderer);
+  return { ...base, characterFramesByAgent, isPlaceholder: real === null };
 }
 
-async function tryLoadRealAssets(): Promise<Omit<OfficeAssets, 'isPlaceholder'> | null> {
+async function loadPerAgentSheets(): Promise<Partial<Record<string, Record<CharacterFrameKey, Texture>>>> {
+  const result: Partial<Record<string, Record<CharacterFrameKey, Texture>>> = {};
+  await Promise.all(
+    ROSTER.map(async (agent) => {
+      try {
+        const sheet = await Assets.load<Spritesheet>(`/office-pixel/characters/${agent.id}.json`);
+        result[agent.id] = sheet.textures as unknown as Record<CharacterFrameKey, Texture>;
+      } catch {
+        // Expected until a custom sheet for this agent is dropped in — not an error.
+      }
+    })
+  );
+  return result;
+}
+
+type BaseAssets = Omit<OfficeAssets, 'isPlaceholder' | 'characterFramesByAgent'>;
+
+async function tryLoadRealAssets(): Promise<BaseAssets | null> {
   try {
     const [characters, tileset] = await Promise.all([
       Assets.load<Spritesheet>('/office-pixel/characters.json'),
@@ -96,7 +127,7 @@ async function tryLoadRealAssets(): Promise<Omit<OfficeAssets, 'isPlaceholder'> 
 // exercised identically regardless of asset source. This is intentionally
 // not meant to look like finished pixel art — see ASSETS.md.
 
-function buildPlaceholderAssets(renderer: Renderer): Omit<OfficeAssets, 'isPlaceholder'> {
+function buildPlaceholderAssets(renderer: Renderer): BaseAssets {
   const characterFrames = {} as Record<CharacterFrameKey, Texture>;
 
   for (const direction of DIRECTIONS) {

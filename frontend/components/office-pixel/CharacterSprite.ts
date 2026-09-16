@@ -1,7 +1,7 @@
-import { AnimatedSprite, Container, Graphics } from 'pixi.js';
+import { AnimatedSprite, Container, Graphics, type Texture } from 'pixi.js';
 import type { Agent, TaskStatus } from '@bharat-ai-office/shared';
 import { STATUS_COLOR } from '@bharat-ai-office/shared';
-import type { Direction, OfficeAssets } from './assets';
+import type { CharacterFrameKey, Direction, OfficeAssets } from './assets';
 
 // Numeric tint per agent color token — the Pixi-friendly counterpart to
 // WalkerAvatar.tsx's TOKEN_HEX map (kept in frontend/components/office/,
@@ -65,7 +65,7 @@ export class CharacterSprite {
 
   private body: AnimatedSprite;
   private statusDot: Graphics;
-  private assets: OfficeAssets;
+  private frames: Record<CharacterFrameKey, Texture>;
   private direction: Direction = 'down';
   private moving = false;
   private pulseT = 0;
@@ -73,21 +73,29 @@ export class CharacterSprite {
 
   constructor(agent: Agent, assets: OfficeAssets) {
     this.agent = agent;
-    this.assets = assets;
+
+    // A custom per-agent sheet (see ASSETS.md "Per-agent custom sprites") is
+    // assumed to already be the real color, so it's drawn untinted; an agent
+    // without one falls back to the shared grayscale rig + `.tint`. Either
+    // way, the badge below always carries the agent's identity color so
+    // department shape + color stay meaningful even on custom art.
+    const customFrames = assets.characterFramesByAgent[agent.id];
+    this.frames = customFrames ?? assets.characterFrames;
+    const identityTint = TOKEN_TINT[agent.color] ?? TOKEN_TINT['--cyan'];
 
     this.view = new Container();
     this.view.eventMode = 'static';
     this.view.cursor = 'pointer';
 
-    this.body = new AnimatedSprite([assets.characterFrames.idle_down_0, assets.characterFrames.idle_down_1]);
+    this.body = new AnimatedSprite([this.frames.idle_down_0, this.frames.idle_down_1]);
     this.body.anchor.set(0.5, 0.7);
-    this.body.tint = TOKEN_TINT[agent.color] ?? TOKEN_TINT['--cyan'];
+    if (!customFrames) this.body.tint = identityTint;
     this.body.animationSpeed = IDLE_ANIM_SPEED;
     this.body.play();
     this.view.addChild(this.body);
 
     const badge = drawBadge(agent.shape);
-    badge.tint = this.body.tint;
+    badge.tint = identityTint;
     badge.position.set(9, -22);
     this.view.addChild(badge);
 
@@ -134,8 +142,8 @@ export class CharacterSprite {
 
   private applyFrames(): void {
     const frames = this.moving
-      ? [0, 1, 2, 3].map((i) => this.assets.characterFrames[`walk_${this.direction}_${i as 0 | 1 | 2 | 3}`])
-      : [0, 1].map((i) => this.assets.characterFrames[`idle_${this.direction}_${i as 0 | 1}`]);
+      ? [0, 1, 2, 3].map((i) => this.frames[`walk_${this.direction}_${i as 0 | 1 | 2 | 3}`])
+      : [0, 1].map((i) => this.frames[`idle_${this.direction}_${i as 0 | 1}`]);
     this.body.textures = frames;
     this.body.animationSpeed = this.moving ? WALK_ANIM_SPEED : IDLE_ANIM_SPEED;
     this.body.gotoAndPlay(0);

@@ -39,12 +39,82 @@ etc.) as long as it matches the spec below exactly.
 
 Not part of the sprite sheet — these stay small vector shapes drawn directly
 in `CharacterSprite.ts` (ported from the old `WalkerAvatar.tsx`'s
-`ShapePath`), composited above the character sprite.
+`ShapePath`), composited above the character sprite. They always carry the
+agent's identity color (`TOKEN_TINT[agent.color]`) even when that agent is
+using a custom per-agent sprite (see below), so shape + color stay
+meaningful regardless of art source.
+
+## Per-agent custom sprites (real photos / custom art per employee)
+
+By default all 11 agents share the one grayscale rig above, recolored per
+agent via runtime `.tint`. If you want each agent to have their own
+distinct art (e.g. a photo turned into a custom pixel sprite) instead of a
+shared recolored rig, drop a **complete replacement sheet per agent** at:
+
+```
+frontend/public/office-pixel/characters/<agentId>.json
+frontend/public/office-pixel/characters/<agentId>.png
+```
+
+- Same export format, frame size (32×32) and the same 24 frame keys as the
+  shared sheet above — a custom sheet must be a full walk+idle cycle in all
+  4 directions, not a single static image (the AnimatedSprite always asks
+  for `walk_left_2` etc.; a missing key throws).
+- Author it in **real color**, not grayscale — a per-agent sheet is drawn
+  untinted (`CharacterSprite.ts` skips `.tint` whenever
+  `characterFramesByAgent[agentId]` exists), so whatever colors are in the
+  PNG are exactly what renders.
+- `<agentId>` must be one of the 11 roster ids (`shared/src/roster.ts`):
+  `nova`, `kael`, `priya`, `devraj`, `simran`, `arjun`, `meera`, `raghav`,
+  `tanya`, `farhan`, `isha`.
+- **Fully incremental**: `loadOfficeAssets()` (`assets.ts`) tries each of
+  the 11 possible per-agent files independently and silently skips any
+  that 404. Drop in one, five, or all eleven — everyone else keeps using
+  the shared tinted rig. No code change needed either way.
+- Turning a real photo into this format is a manual/AI-assisted pixel-art
+  pass, not an automatic conversion — a photo has no walk cycle or
+  4-direction facing to pull frames from. `generate-pixel-art.py`'s
+  `paint_block()`/`base_character()` is a reasonable reference for the
+  frame layout and grid size if you want to hand-author or prompt an image
+  model for each frame.
+
+## Full asset inventory
+
+Everything that can currently be visually replaced in the office scene —
+nothing else in the app (the surrounding dashboard chrome: HudBar, panels,
+roster, charts) uses image assets, it's all CSS/SVG/text.
+
+| Key | File | What it is | Where it's used |
+|---|---|---|---|
+| `idle_down/up/left/right_0-1`, `walk_down/up/left/right_0-3` | `characters.json/png` (shared) or `characters/<agentId>.json/png` (per-agent) | The 24-frame walk/idle rig | Every agent's on-floor character |
+| `floor_a` / `floor_b` | `tileset.json/png` | The two alternating base floor tones | Every non-wall, non-decor tile |
+| `wall_edge` | `tileset.json/png` | Exterior boundary wall | Outer ring of the floor grid |
+| `wall_inner` | `tileset.json/png` | Interior partition wall | Nova's enclosed office walls |
+| `window` | `tileset.json/png` | A window punched into the exterior wall | A few columns of the top exterior wall |
+| `desk` | `tileset.json/png` | An employee's desk (with monitor glow) | Under each of the 10 employees' home position |
+| `nova_office` | `tileset.json/png` | Nova's desk mat (violet, hub glyph) | Under Nova's home position |
+| `review_table` | `tileset.json/png` | A meeting-table tile (amber border) | Currently unused in the render — kept in the atlas in case you want to reintroduce a visible marker at `REVIEW_TABLE_POSITION`; agents still walk to that spot on task completion, it's just not drawn today |
+| `plant` | `tileset.json/png` | A potted plant | 3 fixed spots (corners + bottom-center) |
+| `water_cooler` | `tileset.json/png` | A water cooler | 1 fixed spot, left aisle |
+| `printer` | `tileset.json/png` | A printer | 1 fixed spot, right aisle |
+| `bookshelf` | `tileset.json/png` | A bookshelf with colored spines | 2 fixed spots, bottom corners |
+| `rug_eng` | `tileset.json/png` | Cyan department rug | Under eng-dept desks (Kael, Priya, Devraj, Arjun, Raghav) |
+| `rug_design` | `tileset.json/png` | Amber department rug | Under design-dept desks (Simran) |
+| `rug_data` | `tileset.json/png` | Green department rug | Under data-dept desks (Meera, Tanya) |
+| `rug_ops` | `tileset.json/png` | Magenta department rug | Under ops-dept desks (Farhan, Isha) |
+
+Exact pixel positions for every tile/prop/wall/window/rug live in
+`pixiScene.ts` (`DECOR_PROPS`, `WINDOW_COLS`, `NOVA_WALL_*`, `DEPT_RUG`,
+`buildFloorLayer`/`buildDecorLayer`) if you need to relocate something
+rather than just re-skin it.
 
 ## Swapping in different art later
 
 1. Drop replacement `characters.json`/`.png` and `tileset.json`/`.png` into
-   `frontend/public/office-pixel/`, matching the frame/tile keys above.
-2. Reload — `loadOfficeAssets()` in `assets.ts` tries the real sheet first
-   and only falls back to the procedural placeholder if it 404s. No other
-   change needed.
+   `frontend/public/office-pixel/` (shared rig + tileset), and/or
+   `characters/<agentId>.json`/`.png` (per-agent overrides) — matching the
+   frame/tile keys above.
+2. Reload — `loadOfficeAssets()` in `assets.ts` tries real art first and
+   only falls back to the procedural placeholder (for the shared rig/tiles)
+   or the shared tinted rig (for an agent with no override) if something's
+   missing. No other change needed.
