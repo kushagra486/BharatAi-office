@@ -1,23 +1,45 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useClock } from '@/hooks/useClock';
 
 export interface HudBarProps {
   sessionId: string;
   connected: boolean;
-  pendingApprovals: number;
-  onOpenRecall: () => void;
-  onOpenApprovals: () => void;
+  // Recall/Approvals only apply to the office floor page — omit both on
+  // pages that don't have that dock/modal mounted, and the buttons hide.
+  pendingApprovals?: number;
+  onOpenRecall?: () => void;
+  onOpenApprovals?: () => void;
 }
 
-function useClock() {
-  const [now, setNow] = useState<Date | null>(null); // null on first render — avoids an SSR/client mismatch
-  useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
+const NAV_LINKS = [
+  { href: '/', label: 'Office' },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/status', label: 'Status' },
+];
+
+function SiteNav() {
+  const pathname = usePathname();
+  return (
+    <nav className="hidden items-center gap-1 sm:flex">
+      {NAV_LINKS.map((link) => {
+        const active = pathname === link.href;
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={`rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
+              active ? 'bg-line/60 text-[#E6EDF3]' : 'text-[#6B7686] hover:text-[#E6EDF3]'
+            }`}
+          >
+            {link.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
 
 export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, onOpenApprovals }: HudBarProps) {
@@ -53,6 +75,9 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
             {now ? now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
           </span>
         </div>
+
+        <div className="hidden h-4 w-px bg-line md:block" />
+        <SiteNav />
       </div>
 
       <div className="flex items-center gap-3 font-mono text-[11px] text-[#6B7686]">
@@ -64,28 +89,32 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
           />
           {sessionId}
         </span>
-        <button
-          type="button"
-          onClick={onOpenRecall}
-          className="rounded border border-line px-2 py-1 uppercase tracking-wide text-cyan transition-all duration-200 hover:scale-105 hover:border-cyan hover:shadow-[0_0_10px_-2px_#2FE6D2] active:scale-95"
-        >
-          ⌕ Recall
-        </button>
-        <button
-          type="button"
-          onClick={onOpenApprovals}
-          className="relative rounded border border-line px-2 py-1 uppercase tracking-wide text-amber transition-all duration-200 hover:scale-105 hover:border-amber hover:shadow-[0_0_10px_-2px_#FFB454] active:scale-95"
-        >
-          ⚑ Approvals
-          {pendingApprovals > 0 && (
-            <span
-              key={pendingApprovals}
-              className="absolute -right-1.5 -top-1.5 flex h-4 w-4 animate-pop-in items-center justify-center rounded-full bg-magenta text-[9px] text-void shadow-[0_0_6px_1px_#FF4D6D]"
-            >
-              {pendingApprovals}
-            </span>
-          )}
-        </button>
+        {onOpenRecall && (
+          <button
+            type="button"
+            onClick={onOpenRecall}
+            className="rounded border border-line px-2 py-1 uppercase tracking-wide text-cyan transition-all duration-200 hover:scale-105 hover:border-cyan hover:shadow-[0_0_10px_-2px_#2FE6D2] active:scale-95"
+          >
+            ⌕ Recall
+          </button>
+        )}
+        {onOpenApprovals && (
+          <button
+            type="button"
+            onClick={onOpenApprovals}
+            className="relative rounded border border-line px-2 py-1 uppercase tracking-wide text-amber transition-all duration-200 hover:scale-105 hover:border-amber hover:shadow-[0_0_10px_-2px_#FFB454] active:scale-95"
+          >
+            ⚑ Approvals
+            {!!pendingApprovals && pendingApprovals > 0 && (
+              <span
+                key={pendingApprovals}
+                className="absolute -right-1.5 -top-1.5 flex h-4 w-4 animate-pop-in items-center justify-center rounded-full bg-magenta text-[9px] text-void shadow-[0_0_6px_1px_#FF4D6D]"
+              >
+                {pendingApprovals}
+              </span>
+            )}
+          </button>
+        )}
       </div>
     </header>
   );
