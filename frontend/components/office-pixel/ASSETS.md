@@ -136,6 +136,30 @@ one plain square PNG per agent (any reasonable size; the current set is
   custom sprites" above) with full walk-cycle animation, so the two
   render paths coexist per-agent with no configuration needed either way.
 
+### Current source: real 3D Minecraft-style models
+
+The current 11 portraits are rendered from actual per-agent 3D models
+(Steve-style rig: head/torso/2 arms/2 legs, flat vertex-colored, no
+armature/animation), kept in `frontend/assets-src/minecraft-characters/
+<agentId>/<agentId>.{glb,obj}` for provenance and future re-rendering —
+see that folder's `SOURCE-README.md` for what each model is and its
+known limitations (only a front reference view existed; side/back/top
+proportions are standard-humanoid guesses, not traced).
+
+To re-render a portrait from its `.glb`:
+1. Serve `frontend/assets-src/minecraft-characters/` over local HTTP
+   (e.g. `python3 -m http.server` from that directory) alongside a
+   `node_modules/three` install (`npm install three@0.160`, ad hoc —
+   this isn't a project dependency, just needed for this one-off render).
+2. Open `frontend/scripts/render-3d-portrait.html?model=/<agentId>/<agentId>.glb`
+   in a browser (or drive it headlessly, e.g. Playwright) — it renders a
+   320×320 transparent-background bust shot at a fixed 3/4 camera angle
+   (`angle=25&dist=2.9&camy=1.55&looky=1.45` are the current defaults,
+   overridable via query params) onto a `<canvas id="c">`.
+3. Screenshot the canvas, crop to content bounds with ~10px padding
+   (square it off), resize to 128×128, save as
+   `frontend/public/office-pixel/portraits/<agentId>.png`.
+
 ## Full asset inventory
 
 Everything below is the office *floor* scene specifically; the dashboard
