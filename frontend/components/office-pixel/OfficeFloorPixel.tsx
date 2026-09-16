@@ -51,7 +51,7 @@ export function OfficeFloorPixel({ agents, tasks, messages, onSelectAgent }: Off
       await app.init({
         width: STAGE_W,
         height: STAGE_H,
-        background: 0x0e141c,
+        background: 0xebe6d8,
         antialias: false,
         resolution: typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
         autoDensity: true,

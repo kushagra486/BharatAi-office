@@ -239,7 +239,7 @@ export class OfficeScene {
     this.ambientT += deltaMS * 0.0015;
     if (this.novaAura) {
       const phase = this.ambientT * 0.85 + 1.2;
-      this.novaAura.alpha = 0.5 + Math.sin(phase) * 0.22;
+      this.novaAura.alpha = 0.24 + Math.sin(phase) * 0.12;
       this.novaAura.scale.set(0.88 + Math.sin(phase) * 0.12);
     }
   }
@@ -361,8 +361,8 @@ export class OfficeScene {
     const nova = agents.find((a) => a.id === 'nova');
     if (nova) {
       const novaPx = toPixel({ x: nova.home_x, y: nova.home_y });
-      this.novaAura = new Graphics().circle(0, 0, 34).fill(0x8b7cf6);
-      this.novaAura.alpha = 0.28;
+      this.novaAura = new Graphics().circle(0, 0, 34).fill(0xd6a854);
+      this.novaAura.alpha = 0.22;
       this.novaAura.position.set(novaPx.x, novaPx.y);
       layer.addChild(this.novaAura);
     }
@@ -431,6 +431,6 @@ export class OfficeScene {
       g.moveTo(from.x + ux * segStart, from.y + uy * segStart);
       g.lineTo(from.x + ux * segEnd, from.y + uy * segEnd);
     }
-    g.stroke({ width: 1, color: 0x1d2836 });
+    g.stroke({ width: 1, color: 0x6b5f48, alpha: 0.4 });
   }
 }
