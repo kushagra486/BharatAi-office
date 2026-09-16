@@ -2,7 +2,7 @@
 
 A local-first multi-agent harness that turns a single project brief into a
 fully staffed AI office — 10 employee agents coordinated by an orchestrator
-(Nova), visualized as a living 2D office floor.
+(Nova), visualized as a living 3D office floor.
 
 See [`BHARAT_AI_OFFICE_PRD.md`](./BHARAT_AI_OFFICE_PRD.md) for the full
 product spec, including the v2 addendum describing the architecture below.
@@ -37,8 +37,8 @@ two cooperating processes:
 The daemon is a small always-on Node service, not a fit for classic
 request/response serverless functions: it holds a long-lived WebSocket to
 the frontend, owns a local SQLite file, and runs `git` against a real
-working-tree checkout. Both processes run side by side; a future Electron
-build (Phase 7 in the PRD) packages both into one native app.
+working-tree checkout. Both processes run side by side; `npm run electron`
+(see below) packages both into one native desktop app (Phase 7 in the PRD).
 
 ## Getting started
 
@@ -69,6 +69,20 @@ addendum. Only the daemon ever runs `git`; employees have no git tool at
 all, and `run_command` denylists git/network/sudo invocations as a second
 line of defense.
 
+### Desktop app
+
+`npm run electron` runs both processes inside one native window instead of
+two terminals + a browser tab:
+
+```bash
+npm run build       # daemon + frontend production builds
+npm run electron    # spawns both, opens a window once the frontend answers
+```
+
+`electron/main.js` is intentionally minimal — it just spawns `npm start` in
+`daemon/` and `frontend/` and points a `BrowserWindow` at the result. Closing
+the window stops both processes.
+
 ### Getting API keys
 
 - **NVIDIA NIM**: create a free key at [build.nvidia.com](https://build.nvidia.com) — one key gives access to a large catalog of hosted models.
@@ -86,3 +100,4 @@ more rate-limit headroom since each agent's assignment has fallbacks on the
 | `/shared` | Hive types, the agent roster, and design tokens — imported by both `/daemon` and `/frontend` so the schema and visuals never drift apart |
 | `/daemon` | AgentRunner (tool-use loop), the multi-provider LLM router, Hive (SQLite), Nova, WebSocket bridge, REST endpoints |
 | `/frontend` | Next.js office floor UI |
+| `/electron` | Native desktop wrapper (`npm run electron`) — spawns the daemon + frontend and shows the frontend in a window |
