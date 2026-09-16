@@ -7,8 +7,7 @@ import { agentStatus, tasksByAgentMap } from '@/lib/agentStatus';
 import { loadOffice3DAssets, type Office3DAssets } from './assets3d';
 import { OfficeScene3D } from './OfficeScene3D';
 
-// Same public contract as OfficeFloorPixelProps (frontend/components/office-pixel/OfficeFloorPixel.tsx)
-// so app/page.tsx only needs an import swap.
+// Same shape as the retired 2D floor's props so app/page.tsx only needed an import swap.
 export interface OfficeFloor3DProps {
   agents: Agent[];
   tasks: Task[];

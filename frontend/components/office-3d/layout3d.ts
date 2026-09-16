@@ -5,8 +5,8 @@ import { REVIEW_TABLE_POSITION } from '@bharat-ai-office/shared';
 // the Kenney Furniture Kit models (desk/wall/floor are all authored at
 // real-world meter scale with no rescaling needed — see
 // frontend/public/office-3d/props/SOURCE-README.md). Same 30x17 grid the
-// old 2D scene used (frontend/components/office-pixel/coords.ts), so
-// shared/src/roster.ts's percentage coordinates need no changes.
+// old 2D scene used, so shared/src/roster.ts's percentage coordinates need
+// no changes.
 export const GRID_COLS = 30;
 export const GRID_ROWS = 17;
 
