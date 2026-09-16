@@ -85,6 +85,9 @@ export class OfficeScene {
   private envelopes: EnvelopeState[] = [];
   private effectsLayer = new Container();
   private tickerFn: (ticker: Ticker) => void;
+  private ambientT = 0;
+  private tableAura!: Graphics;
+  private novaAura: Graphics | null = null;
 
   constructor(
     private assets: OfficeAssets,
@@ -93,9 +96,10 @@ export class OfficeScene {
   ) {
     const floorLayer = this.buildFloorLayer(agents);
     const decorLayer = this.buildDecorLayer(agents);
+    const ambientLayer = this.buildAmbientLayer(agents);
     const charactersLayer = new Container();
 
-    this.root.addChild(floorLayer, decorLayer, charactersLayer, this.effectsLayer);
+    this.root.addChild(floorLayer, decorLayer, ambientLayer, charactersLayer, this.effectsLayer);
 
     for (const agent of agents) {
       const character = new CharacterSprite(agent, assets);
@@ -162,6 +166,20 @@ export class OfficeScene {
     for (const character of this.characters.values()) character.update(deltaTime);
     this.tickWalks(deltaMS);
     this.tickEnvelopes(deltaMS);
+    this.tickAmbient(deltaMS);
+  }
+
+  /** A slow "breathing" glow under the review table and Nova's office — a
+   * modern ambient-light touch so the room reads as alive even when idle. */
+  private tickAmbient(deltaMS: number): void {
+    this.ambientT += deltaMS * 0.0015;
+    this.tableAura.alpha = 0.55 + Math.sin(this.ambientT) * 0.25;
+    this.tableAura.scale.set(0.88 + Math.sin(this.ambientT) * 0.12);
+    if (this.novaAura) {
+      const phase = this.ambientT * 0.85 + 1.2;
+      this.novaAura.alpha = 0.5 + Math.sin(phase) * 0.22;
+      this.novaAura.scale.set(0.88 + Math.sin(phase) * 0.12);
+    }
   }
 
   private tickWalks(deltaMS: number): void {
@@ -271,6 +289,28 @@ export class OfficeScene {
         layer.addChild(tile);
       }
     }
+    return layer;
+  }
+
+  /** Soft under-glow auras — amber breathing light at the review table, violet at Nova's office. */
+  private buildAmbientLayer(agents: Agent[]): Container {
+    const layer = new Container();
+
+    const tablePx = toPixel(REVIEW_TABLE_POSITION);
+    this.tableAura = new Graphics().circle(0, 0, 30).fill(0xffb454);
+    this.tableAura.alpha = 0.3;
+    this.tableAura.position.set(tablePx.x, tablePx.y);
+    layer.addChild(this.tableAura);
+
+    const nova = agents.find((a) => a.id === 'nova');
+    if (nova) {
+      const novaPx = toPixel({ x: nova.home_x, y: nova.home_y });
+      this.novaAura = new Graphics().circle(0, 0, 34).fill(0x8b7cf6);
+      this.novaAura.alpha = 0.28;
+      this.novaAura.position.set(novaPx.x, novaPx.y);
+      layer.addChild(this.novaAura);
+    }
+
     return layer;
   }
 

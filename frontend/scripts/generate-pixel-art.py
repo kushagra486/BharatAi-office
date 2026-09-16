@@ -86,33 +86,54 @@ CHAR_MAP = {
 }
 
 
+def paint_block(canvas, x0, y0, x1, y1):
+    """
+    Paints a hard-edged rectangular block: a 1px OUTLINE border (skipped on
+    the short top/bottom edge of blocks under 3px tall, e.g. legs, so they
+    don't render as solid outline bars) and, for blocks 6px+ wide, a
+    HIGHLIGHT column on the left and a SHADOW column on the right flanking a
+    flat BASE fill — a lit-from-upper-left "cube face" instead of the old
+    soft rounded gradient. This is the one shape primitive the whole
+    Minecraft-style blocky rig (head/torso/arms/legs) is built from.
+    """
+    width = x1 - x0 + 1
+    height = y1 - y0 + 1
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            on_v_edge = x in (x0, x1)
+            on_h_edge = height >= 3 and y in (y0, y1)
+            if on_v_edge or on_h_edge:
+                canvas[(x, y)] = OUTLINE
+            elif width >= 6 and x == x0 + 1:
+                canvas[(x, y)] = HIGHLIGHT
+            elif width >= 6 and x == x1 - 1:
+                canvas[(x, y)] = SHADOW
+            else:
+                canvas[(x, y)] = BASE
+
+
 def base_character(eyes: str):
     """
     eyes: 'both' | 'none' | 'left' | 'right' — which eye pixels to paint.
-    Builds the down-facing silhouette (a small rounded-hood head over a
-    rounded body) on the 16x16 grid; direction variants reuse this shape.
+    Builds the down-facing Minecraft-style blocky silhouette on the 16x16
+    grid — a squared-off head block, a squared torso, flanking arm blocks,
+    and two stubby leg blocks — instead of the old rounded-hood gradient.
+    Direction variants reuse this exact shape, varying only which eye
+    pixels get painted.
     """
     c = new_canvas()
-    # head
-    row(c, 2, 5, "OOOOOO", CHAR_MAP)
-    row(c, 3, 4, "OHHHHHSO", CHAR_MAP)
-    row(c, 4, 3, "OHHBBBBSSO", CHAR_MAP)
-    row(c, 5, 3, "OHBBBBBSSO", CHAR_MAP)
-    row(c, 6, 3, "OHBBBBBSSO", CHAR_MAP)  # base row; eye pixels overridden below
+    paint_block(c, 4, 0, 11, 6)  # head
+    paint_block(c, 3, 8, 12, 12)  # torso
+    paint_block(c, 0, 8, 2, 12)  # left arm
+    paint_block(c, 13, 8, 15, 12)  # right arm
+    paint_block(c, 4, 13, 6, 14)  # left leg
+    paint_block(c, 9, 13, 11, 14)  # right leg
+    row(c, 15, 4, "DDDDDDDD", CHAR_MAP)  # drop shadow, matches head width
+
     if eyes in ("both", "left"):
-        c[(6, 6)] = FACE
+        c[(6, 3)] = FACE
     if eyes in ("both", "right"):
-        c[(9, 6)] = FACE
-    row(c, 7, 3, "OHBBBBBSSO", CHAR_MAP)
-    row(c, 8, 4, "OSSSSSSO", CHAR_MAP)
-    row(c, 9, 5, "OOOOOO", CHAR_MAP)
-    # body
-    row(c, 10, 4, "OHBBBSO", CHAR_MAP)
-    row(c, 11, 3, "OHBBBBBSSO", CHAR_MAP)
-    row(c, 12, 3, "OHBBBBBSSO", CHAR_MAP)
-    row(c, 13, 3, "OHBBBBBSSO", CHAR_MAP)
-    row(c, 14, 4, "OSSSSSSO", CHAR_MAP)
-    row(c, 15, 5, "DDDDDD", CHAR_MAP)
+        c[(9, 3)] = FACE
     return c
 
 
@@ -182,15 +203,24 @@ def grid_to_image(grid) -> Image.Image:
 def build_tile_floor_a():
     g = tile_canvas()
     border(g, TOK_LINE_SOFT)
+    # deterministic dither noise (a fixed pixel set, not randomized, so
+    # rebuilds are reproducible) — a chunkier, blockier block-texture feel
+    # instead of a perfectly flat fill.
+    for x, y in [(2, 2), (9, 3), (13, 4), (5, 8), (10, 10), (3, 12), (12, 13)]:
+        g[y][x] = TOK_LINE_SOFT
+    for x, y in [(6, 6), (12, 9)]:
+        g[y][x] = TOK_PANEL_ALT
     return grid_to_image(g)
 
 
 def build_tile_floor_b():
     g = [[TOK_PANEL_ALT for _ in range(LOGICAL)] for _ in range(LOGICAL)]
     border(g, TOK_LINE_SOFT)
-    # a couple of subtle flecks so it doesn't read as perfectly flat
-    for x, y in [(4, 5), (11, 9), (7, 12)]:
+    # a scatter of subtle flecks so it doesn't read as perfectly flat
+    for x, y in [(4, 5), (11, 9), (7, 12), (2, 3), (13, 6), (9, 2), (5, 13), (12, 11)]:
         g[y][x] = TOK_LINE
+    for x, y in [(8, 8), (3, 9)]:
+        g[y][x] = TOK_PANEL
     return grid_to_image(g)
 
 

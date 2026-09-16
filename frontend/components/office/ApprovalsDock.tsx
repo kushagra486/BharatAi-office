@@ -26,7 +26,7 @@ export function ApprovalsDock({ escalations, onApprove, onDeny }: ApprovalsDockP
         {pending.map((esc) => (
           <div
             key={esc.id}
-            className="flex min-w-[260px] shrink-0 flex-col justify-between gap-2 rounded-lg border border-amber/40 bg-amber/5 p-3"
+            className="flex min-w-[260px] shrink-0 animate-fade-slide-up flex-col justify-between gap-2 rounded-lg border border-amber/40 bg-amber/5 p-3 shadow-[0_0_14px_-6px_#FFB454]"
           >
             <div>
               <div className="font-mono text-[10px] uppercase tracking-wide text-amber">{esc.agent_id}</div>
@@ -36,14 +36,14 @@ export function ApprovalsDock({ escalations, onApprove, onDeny }: ApprovalsDockP
               <button
                 type="button"
                 onClick={() => onApprove(esc.id)}
-                className="flex-1 rounded border border-green/50 bg-green/10 py-1 font-mono text-[10px] uppercase text-green transition-colors hover:bg-green/20"
+                className="flex-1 rounded border border-green/50 bg-green/10 py-1 font-mono text-[10px] uppercase text-green transition-all duration-150 hover:scale-105 hover:bg-green/20 active:scale-95"
               >
                 Approve
               </button>
               <button
                 type="button"
                 onClick={() => onDeny(esc.id)}
-                className="flex-1 rounded border border-magenta/50 bg-magenta/10 py-1 font-mono text-[10px] uppercase text-magenta transition-colors hover:bg-magenta/20"
+                className="flex-1 rounded border border-magenta/50 bg-magenta/10 py-1 font-mono text-[10px] uppercase text-magenta transition-all duration-150 hover:scale-105 hover:bg-magenta/20 active:scale-95"
               >
                 Deny
               </button>
@@ -54,7 +54,7 @@ export function ApprovalsDock({ escalations, onApprove, onDeny }: ApprovalsDockP
         {resolved.map((esc) => (
           <div
             key={esc.id}
-            className={`flex min-w-[220px] shrink-0 flex-col justify-center gap-1 rounded-lg border p-3 opacity-50 ${
+            className={`flex min-w-[220px] shrink-0 flex-col justify-center gap-1 rounded-lg border p-3 opacity-50 transition-opacity duration-300 animate-fade-slide-up ${
               esc.resolution === 'approved' ? 'border-green/30' : 'border-magenta/30'
             }`}
           >

@@ -65,17 +65,20 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
         )}
       </div>
       <div className="flex-1 overflow-y-auto">
-        {withStatus.map(({ agent, status, task }) => (
+        {withStatus.map(({ agent, status, task }, index) => (
           <button
             key={agent.id}
             type="button"
             onClick={() => onSelectAgent(agent.id)}
-            className={`flex w-full items-start gap-2.5 border-b border-line/60 px-3 py-2.5 text-left transition-colors hover:bg-line/20 ${
+            style={{ animationDelay: `${index * 35}ms` }}
+            className={`flex w-full origin-left animate-fade-slide-up items-start gap-2.5 border-b border-line/60 px-3 py-2.5 text-left transition-all duration-150 hover:scale-[1.015] hover:bg-line/20 active:scale-[0.99] ${
               selectedAgentId === agent.id ? 'bg-line/30' : ''
             }`}
           >
             <span
-              className="mt-1 h-2 w-2 shrink-0 rounded-full"
+              className={`mt-1 h-2 w-2 shrink-0 rounded-full transition-shadow ${
+                status === 'working' || status === 'blocked' ? 'animate-pulse-dot' : ''
+              }`}
               style={{ backgroundColor: STATUS_COLOR[status], boxShadow: status === 'working' || status === 'blocked' ? `0 0 6px ${STATUS_COLOR[status]}` : undefined }}
             />
             <span className="min-w-0 flex-1">

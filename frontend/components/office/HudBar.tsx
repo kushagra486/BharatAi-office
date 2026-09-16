@@ -24,7 +24,14 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
   const now = useClock();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-void/90 px-4 py-2 backdrop-blur">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-void/90 px-4 py-2 backdrop-blur relative">
+      {/* Modern-UI accent: a slow gradient sweep along the top edge, purely decorative. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-px animate-shimmer bg-[length:200%_100%]"
+        style={{
+          backgroundImage: 'linear-gradient(90deg, transparent, #2FE6D2, #8B7CF6, #FFB454, transparent)',
+        }}
+      />
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           {/* Restrained Bharat accent (PRD 7.1): saffron/india-green on brand chrome only. */}
@@ -50,24 +57,31 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
 
       <div className="flex items-center gap-3 font-mono text-[11px] text-[#6B7686]">
         <span className="flex items-center gap-1.5">
-          <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-green' : 'bg-magenta'}`} />
+          <span
+            className={`h-1.5 w-1.5 rounded-full transition-colors ${
+              connected ? 'bg-green text-green animate-glow-pulse' : 'bg-magenta'
+            }`}
+          />
           {sessionId}
         </span>
         <button
           type="button"
           onClick={onOpenRecall}
-          className="rounded border border-line px-2 py-1 uppercase tracking-wide text-cyan transition-colors hover:border-cyan"
+          className="rounded border border-line px-2 py-1 uppercase tracking-wide text-cyan transition-all duration-200 hover:scale-105 hover:border-cyan hover:shadow-[0_0_10px_-2px_#2FE6D2] active:scale-95"
         >
           ⌕ Recall
         </button>
         <button
           type="button"
           onClick={onOpenApprovals}
-          className="relative rounded border border-line px-2 py-1 uppercase tracking-wide text-amber transition-colors hover:border-amber"
+          className="relative rounded border border-line px-2 py-1 uppercase tracking-wide text-amber transition-all duration-200 hover:scale-105 hover:border-amber hover:shadow-[0_0_10px_-2px_#FFB454] active:scale-95"
         >
           ⚑ Approvals
           {pendingApprovals > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-magenta text-[9px] text-void">
+            <span
+              key={pendingApprovals}
+              className="absolute -right-1.5 -top-1.5 flex h-4 w-4 animate-pop-in items-center justify-center rounded-full bg-magenta text-[9px] text-void shadow-[0_0_6px_1px_#FF4D6D]"
+            >
               {pendingApprovals}
             </span>
           )}

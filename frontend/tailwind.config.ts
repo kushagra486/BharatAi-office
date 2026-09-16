@@ -45,10 +45,32 @@ const config: Config = {
           '92%': { opacity: '1' },
           '100%': { offsetDistance: '100%', opacity: '0' },
         },
+        // --- modern-UI motion additions ---
+        'fade-slide-up': {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'pop-in': {
+          '0%': { opacity: '0', transform: 'scale(0.85)' },
+          '60%': { opacity: '1', transform: 'scale(1.08)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'glow-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0px 0px currentColor' },
+          '50%': { boxShadow: '0 0 8px 1px currentColor' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
       },
       animation: {
         'idle-bob': 'idle-bob 2.4s ease-in-out infinite',
         'pulse-dot': 'pulse-dot 1.6s ease-in-out infinite',
+        'fade-slide-up': 'fade-slide-up 320ms cubic-bezier(0.16,1,0.3,1) both',
+        'pop-in': 'pop-in 360ms cubic-bezier(0.34,1.56,0.64,1) both',
+        'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+        shimmer: 'shimmer 3.5s linear infinite',
       },
     },
   },

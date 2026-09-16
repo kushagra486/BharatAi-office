@@ -30,7 +30,7 @@ export function TeamActivity({ messages }: TeamActivityProps) {
     <section className="flex h-40 shrink-0 flex-col border-t border-line bg-panel/95">
       <div className="flex items-center gap-2 border-b border-line px-4 py-1.5">
         <span className="font-mono text-[10px] uppercase tracking-wider text-[#6B7686]">Team Activity</span>
-        <span className="h-1.5 w-1.5 rounded-full bg-green" />
+        <span className="h-1.5 w-1.5 rounded-full bg-green text-green animate-glow-pulse" />
         <span className="font-mono text-[10px] text-[#6B7686]">live mailbox</span>
       </div>
       <div ref={scrollRef} className="flex-1 space-y-1.5 overflow-y-auto px-4 py-2">
@@ -38,7 +38,7 @@ export function TeamActivity({ messages }: TeamActivityProps) {
           <p className="pt-2 text-center font-mono text-[11px] text-[#6B7686]">No activity yet — nothing sent between agents.</p>
         )}
         {chronological.map((m) => (
-          <div key={m.id} className="flex items-start gap-2 text-[11px]">
+          <div key={m.id} className="flex origin-left animate-fade-slide-up items-start gap-2 text-[11px]">
             <span
               className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ backgroundColor: MESSAGE_COLOR[m.type] }}

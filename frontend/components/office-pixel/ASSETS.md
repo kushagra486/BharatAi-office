@@ -20,6 +20,7 @@ etc.) as long as it matches the spec below exactly.
 - Export format: Aseprite/TexturePacker-style JSON hash atlas, loadable via `PIXI.Assets.load()`.
 - Frame size: 32×32px per frame.
 - One base rig only — per-agent color comes from runtime `.tint`, not separate art per agent. The rig is drawn in a **grayscale palette** (near-black outline/eyes, mid-gray shadow, light-gray base, white highlight) so `.tint` reproduces each agent's exact color while the outline and eyes stay dark and legible under any tint, and the shadow/highlight grays produce real shading, not a flat recolor.
+- Silhouette is a **Minecraft-style blocky rig**: a squared head block, a squared torso, flanking arm blocks, and two stubby leg blocks, each a hard-edged rectangle with a 1px outline and a flat highlight/shadow column pair (see `paint_block()` in `generate-pixel-art.py`) — not the earlier rounded-hood gradient.
 - Required frame keys (must match exactly — see `CharacterFrameKey` in `assets.ts`):
   - `idle_down_0`, `idle_down_1`, `idle_up_0`, `idle_up_1`, `idle_left_0`, `idle_left_1`, `idle_right_0`, `idle_right_1` — 2-frame idle bob loop per direction.
   - `walk_down_0..3`, `walk_up_0..3`, `walk_left_0..3`, `walk_right_0..3` — 4-frame walk cycle per direction.
