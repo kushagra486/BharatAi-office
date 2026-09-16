@@ -1,17 +1,13 @@
 import { Assets, Graphics, Rectangle, type Renderer, type Spritesheet, Texture } from 'pixi.js';
 import { ROSTER } from '@bharat-ai-office/shared';
 
-// The texture-atlas contract every asset source (real hand-drawn art or the
+// The texture-atlas contract the tileset (real hand-drawn art or the
 // procedural placeholder below) must satisfy identically. Downstream code
-// (CharacterSprite.ts, pixiScene.ts) only ever addresses textures by these
-// keys — it never knows or cares which source produced them. This is what
-// makes "drop in real art later" a zero-code-change asset swap: see
-// ASSETS.md for the authoring spec real art must follow.
+// (pixiScene.ts) only ever addresses tile textures by these keys — it never
+// knows or cares which source produced them. Agents themselves are rendered
+// from their real portrait photos (see loadPortraitTextures below and
+// CharacterSprite.ts) — there is no procedural character rig.
 export type Direction = 'down' | 'up' | 'left' | 'right';
-export type IdleFrameIndex = 0 | 1;
-export type WalkFrameIndex = 0 | 1 | 2 | 3;
-
-export type CharacterFrameKey = `idle_${Direction}_${IdleFrameIndex}` | `walk_${Direction}_${WalkFrameIndex}`;
 
 export type TileKey =
   | 'floor_a'
@@ -33,7 +29,6 @@ export type TileKey =
 
 export const FRAME_SIZE = 32; // px — matches TILE_SIZE in coords.ts by convention, not requirement
 
-const DIRECTIONS: Direction[] = ['down', 'up', 'left', 'right'];
 const TILE_KEYS: TileKey[] = [
   'floor_a',
   'floor_b',
@@ -54,62 +49,33 @@ const TILE_KEYS: TileKey[] = [
 ];
 
 export interface OfficeAssets {
-  /** Shared fallback rig — grayscale, tinted per agent (see CharacterSprite.ts). Used for any agent without an entry in `characterFramesByAgent`. */
-  characterFrames: Record<CharacterFrameKey, Texture>;
-  /**
-   * Optional full-color per-agent override, keyed by roster id (e.g. "kael").
-   * Populated from `/office-pixel/characters/{agentId}.json` when present —
-   * see ASSETS.md "Per-agent custom sprites". An agent with an entry here is
-   * rendered untinted (the sheet is assumed to already be the real color);
-   * an agent without one falls back to the shared grayscale rig + tint.
-   * This is what lets you replace avatars one at a time without redoing all 11.
-   */
-  characterFramesByAgent: Partial<Record<string, Record<CharacterFrameKey, Texture>>>;
   /**
    * Real profile photos, keyed by roster id, loaded from
    * `/office-pixel/portraits/{agentId}.png` (the same files AgentAvatar.tsx
-   * uses in the roster/side panel). When present, CharacterSprite renders
-   * the agent as a circular photo token on the floor instead of the
-   * animated blocky rig — see ASSETS.md "Dashboard profile photos".
+   * uses in the roster/side panel). CharacterSprite.ts renders every agent
+   * as a circular photo token on the floor using these — see ASSETS.md.
    */
   portraitTextures: Partial<Record<string, Texture>>;
   tiles: Record<TileKey, Texture>;
-  /** True when the procedural placeholder was used because no real shared sheet was found. */
+  /** True when the procedural placeholder tileset was used because no real tileset was found. */
   isPlaceholder: boolean;
 }
 
 /**
- * Loads the office's visual assets: tries a real authored sprite sheet +
- * tileset first, falls back to generating a placeholder that satisfies the
- * exact same CharacterFrameKey/TileKey contract. `renderer` is required for
- * the placeholder path (it rasterizes vector Graphics into textures).
- * Independently, also tries a per-agent custom sheet for each roster id —
- * each one is optional and fails silently, so this works whether none, some,
- * or all 11 agents have custom art dropped in.
+ * Loads the office's visual assets: tries a real authored tileset first,
+ * falls back to generating a placeholder that satisfies the exact same
+ * TileKey contract. `renderer` is required for the placeholder path (it
+ * rasterizes vector Graphics into textures). Independently loads each
+ * agent's portrait photo — optional and fails silently per agent, so this
+ * works whether none, some, or all 11 agents have a portrait dropped in.
  */
 export async function loadOfficeAssets(renderer: Renderer): Promise<OfficeAssets> {
-  const [real, characterFramesByAgent, portraitTextures] = await Promise.all([
-    tryLoadRealAssets(),
-    loadPerAgentSheets(),
-    loadPortraitTextures(),
-  ]);
-  const base = real ?? buildPlaceholderAssets(renderer);
-  return { ...base, characterFramesByAgent, portraitTextures, isPlaceholder: real === null };
-}
-
-async function loadPerAgentSheets(): Promise<Partial<Record<string, Record<CharacterFrameKey, Texture>>>> {
-  const result: Partial<Record<string, Record<CharacterFrameKey, Texture>>> = {};
-  await Promise.all(
-    ROSTER.map(async (agent) => {
-      try {
-        const sheet = await Assets.load<Spritesheet>(`/office-pixel/characters/${agent.id}.json`);
-        result[agent.id] = sheet.textures as unknown as Record<CharacterFrameKey, Texture>;
-      } catch {
-        // Expected until a custom sheet for this agent is dropped in — not an error.
-      }
-    })
-  );
-  return result;
+  const [tiles, portraitTextures] = await Promise.all([tryLoadTileset(), loadPortraitTextures()]);
+  return {
+    tiles: tiles ?? buildPlaceholderTiles(renderer),
+    portraitTextures,
+    isPlaceholder: tiles === null,
+  };
 }
 
 async function loadPortraitTextures(): Promise<Partial<Record<string, Texture>>> {
@@ -126,18 +92,10 @@ async function loadPortraitTextures(): Promise<Partial<Record<string, Texture>>>
   return result;
 }
 
-type BaseAssets = Omit<OfficeAssets, 'isPlaceholder' | 'characterFramesByAgent' | 'portraitTextures'>;
-
-async function tryLoadRealAssets(): Promise<BaseAssets | null> {
+async function tryLoadTileset(): Promise<Record<TileKey, Texture> | null> {
   try {
-    const [characters, tileset] = await Promise.all([
-      Assets.load<Spritesheet>('/office-pixel/characters.json'),
-      Assets.load<Spritesheet>('/office-pixel/tileset.json'),
-    ]);
-    return {
-      characterFrames: characters.textures as unknown as Record<CharacterFrameKey, Texture>,
-      tiles: tileset.textures as unknown as Record<TileKey, Texture>,
-    };
+    const tileset = await Assets.load<Spritesheet>('/office-pixel/tileset.json');
+    return tileset.textures as unknown as Record<TileKey, Texture>;
   } catch {
     // Expected until real art matching ASSETS.md is dropped into
     // frontend/public/office-pixel/ — not an error, just "no art yet".
@@ -145,32 +103,18 @@ async function tryLoadRealAssets(): Promise<BaseAssets | null> {
   }
 }
 
-// --- placeholder generation --------------------------------------------------
+// --- placeholder tileset generation ------------------------------------------
 //
 // Draws simple tinted vector shapes and rasterizes them into textures under
-// the exact same keys real art will use, so the full rendering pipeline
-// (AnimatedSprite frame-swapping, direction changes, tint-per-agent) is
-// exercised identically regardless of asset source. This is intentionally
-// not meant to look like finished pixel art — see ASSETS.md.
+// the exact same TileKey keys real art will use. This is intentionally not
+// meant to look like finished pixel art — see ASSETS.md.
 
-function buildPlaceholderAssets(renderer: Renderer): BaseAssets {
-  const characterFrames = {} as Record<CharacterFrameKey, Texture>;
-
-  for (const direction of DIRECTIONS) {
-    for (const frame of [0, 1] as IdleFrameIndex[]) {
-      characterFrames[`idle_${direction}_${frame}`] = rasterize(renderer, drawBody(direction, idlePose(frame)));
-    }
-    for (const frame of [0, 1, 2, 3] as WalkFrameIndex[]) {
-      characterFrames[`walk_${direction}_${frame}`] = rasterize(renderer, drawBody(direction, walkPose(frame)));
-    }
-  }
-
+function buildPlaceholderTiles(renderer: Renderer): Record<TileKey, Texture> {
   const tiles = {} as Record<TileKey, Texture>;
   for (const key of TILE_KEYS) {
     tiles[key] = rasterize(renderer, drawTile(key));
   }
-
-  return { characterFrames, tiles };
+  return tiles;
 }
 
 const FRAME_RECT = new Rectangle(0, 0, FRAME_SIZE, FRAME_SIZE);
@@ -181,52 +125,6 @@ function rasterize(renderer: Renderer, graphics: Graphics): Texture {
     frame: FRAME_RECT,
     textureSourceOptions: { scaleMode: 'nearest' },
   });
-}
-
-interface Pose {
-  offsetX: number;
-  offsetY: number;
-}
-
-function idlePose(frame: IdleFrameIndex): Pose {
-  // Idle bob baked into the frames themselves (replacing the old CSS
-  // animate-idle-bob keyframe) — a 1px vertical oscillation read through
-  // AnimatedSprite's normal loop, matching how real pixel-art idle cycles
-  // are authored.
-  return { offsetX: 0, offsetY: frame === 0 ? 0 : -1 };
-}
-
-function walkPose(frame: WalkFrameIndex): Pose {
-  // A small horizontal wobble to read as motion; real art replaces this
-  // with an actual leg-cycle animation.
-  const offsets: Pose[] = [{ offsetX: -1, offsetY: 0 }, { offsetX: 0, offsetY: -1 }, { offsetX: 1, offsetY: 0 }, { offsetX: 0, offsetY: -1 }];
-  return offsets[frame];
-}
-
-function drawBody(direction: Direction, pose: Pose): Graphics {
-  const g = new Graphics();
-  const cx = FRAME_SIZE / 2 + pose.offsetX;
-  const cy = FRAME_SIZE / 2 + pose.offsetY;
-  const w = 18;
-  const h = 22;
-
-  // Body — drawn in white so per-agent `.tint` (CharacterSprite.ts) renders
-  // the exact agent color, same as the old SVG's fill={color}.
-  g.roundRect(cx - w / 2, cy - h / 2, w, h, 6).fill(0xffffff);
-
-  // Facing indicator — a small notch on whichever edge faces `direction`,
-  // the only thing that makes direction legible without real art.
-  const nub = 5;
-  const notch: Record<Direction, [number, number]> = {
-    down: [cx, cy + h / 2 - 2],
-    up: [cx, cy - h / 2 + 2],
-    left: [cx - w / 2 + 2, cy],
-    right: [cx + w / 2 - 2, cy],
-  };
-  const [nx, ny] = notch[direction];
-  g.circle(nx, ny, nub / 2).fill(0xffffff);
-
-  return g;
 }
 
 function drawTile(key: TileKey): Graphics {

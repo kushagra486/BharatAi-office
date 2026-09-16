@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 """
-Generates the office floor's pixel-art assets from scratch — no imported
-tilesets, no stock/licensed sprite packs, no reference tracing. Every pixel
-is placed explicitly below. Run with: python3 generate-pixel-art.py
+Generates the office floor's tileset from scratch — no imported tilesets,
+no stock/licensed sprite packs, no reference tracing. Every pixel is placed
+explicitly below. Run with: python3 generate-pixel-art.py
 
 Output matches frontend/components/office-pixel/ASSETS.md exactly:
-  frontend/public/office-pixel/characters.png + characters.json
-  frontend/public/office-pixel/tileset.png    + tileset.json
+  frontend/public/office-pixel/tileset.png + tileset.json
 
-Character frames are authored on a 16x16 logical grid in a grayscale
-palette, then nearest-neighbor upscaled 2x to the spec's 32x32. Grayscale
-is deliberate: PixiJS applies each agent's color via `.tint` (RGB multiply)
-at runtime, so near-black pixels (outline, eyes) stay dark under any tint
-while light-gray/white pixels become that agent's vivid color — the same
-texture reproduces all 11 agent colors with real shading, not just a flat
-recolor. Tiles are authored directly in the app's real design tokens
-(shared/src/tokens.ts) since they are not tinted at runtime.
+Tiles are authored directly in the app's real design tokens
+(shared/src/tokens.ts) since they are not tinted at runtime. Agents are
+rendered on the floor as their 3D-model-derived portrait photos, not
+procedural pixel-art sprites — see ASSETS.md.
 """
 
 import json
@@ -27,16 +22,8 @@ OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "public", "office-pixel"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 LOGICAL = 16  # design grid
-SCALE = 2  # -> 32x32 final, matching FRAME_SIZE/TILE_SIZE in coords.ts/assets.ts
+SCALE = 2  # -> 32x32 final, matching TILE_SIZE in coords.ts/assets.ts
 FRAME = LOGICAL * SCALE
-
-# --- grayscale character palette (tint-multiplied at runtime) --------------
-OUTLINE = (26, 26, 26, 255)  # stays near-black under any tint
-FACE = (15, 15, 15, 255)  # eyes — stays dark/legible under any tint
-SHADOW = (120, 120, 120, 255)  # -> a darker shade of the tint color
-BASE = (218, 218, 218, 255)  # -> the agent's actual color
-HIGHLIGHT = (255, 255, 255, 255)  # -> the brightest shade of the tint color
-DROP_SHADOW = (10, 10, 10, 70)  # soft grounding shadow, low alpha
 TRANSPARENT = (0, 0, 0, 0)
 
 # --- real brand tokens for tiles (not tinted — authored in final color) ----
@@ -61,111 +48,6 @@ TOK_GLASS_LIGHT = (110, 160, 190, 255)
 TOK_WOOD = (94, 62, 40, 255)
 TOK_WOOD_LIGHT = (138, 97, 66, 255)
 WHITE = (255, 255, 255, 255)
-
-
-def new_canvas():
-    return {}  # (x, y) -> RGBA tuple, sparse — unset cells stay transparent
-
-
-def row(canvas, y, start_x, chars, mapping):
-    """Paints one row from a compact string, e.g. '.OHHHHHHSO.' where each
-    char maps to a color via `mapping` and '.' is transparent (skipped)."""
-    for i, ch in enumerate(chars):
-        if ch == ".":
-            continue
-        canvas[(start_x + i, y)] = mapping[ch]
-
-
-CHAR_MAP = {
-    "O": OUTLINE,
-    "H": HIGHLIGHT,
-    "B": BASE,
-    "S": SHADOW,
-    "F": FACE,
-    "D": DROP_SHADOW,
-}
-
-
-def paint_block(canvas, x0, y0, x1, y1):
-    """
-    Paints a hard-edged rectangular block: a 1px OUTLINE border (skipped on
-    the short top/bottom edge of blocks under 3px tall, e.g. legs, so they
-    don't render as solid outline bars) and, for blocks 6px+ wide, a
-    HIGHLIGHT column on the left and a SHADOW column on the right flanking a
-    flat BASE fill — a lit-from-upper-left "cube face" instead of the old
-    soft rounded gradient. This is the one shape primitive the whole
-    Minecraft-style blocky rig (head/torso/arms/legs) is built from.
-    """
-    width = x1 - x0 + 1
-    height = y1 - y0 + 1
-    for y in range(y0, y1 + 1):
-        for x in range(x0, x1 + 1):
-            on_v_edge = x in (x0, x1)
-            on_h_edge = height >= 3 and y in (y0, y1)
-            if on_v_edge or on_h_edge:
-                canvas[(x, y)] = OUTLINE
-            elif width >= 6 and x == x0 + 1:
-                canvas[(x, y)] = HIGHLIGHT
-            elif width >= 6 and x == x1 - 1:
-                canvas[(x, y)] = SHADOW
-            else:
-                canvas[(x, y)] = BASE
-
-
-def base_character(eyes: str):
-    """
-    eyes: 'both' | 'none' | 'left' | 'right' — which eye pixels to paint.
-    Builds the down-facing Minecraft-style blocky silhouette on the 16x16
-    grid — a squared-off head block, a squared torso, flanking arm blocks,
-    and two stubby leg blocks — instead of the old rounded-hood gradient.
-    Direction variants reuse this exact shape, varying only which eye
-    pixels get painted.
-    """
-    c = new_canvas()
-    paint_block(c, 4, 0, 11, 6)  # head
-    paint_block(c, 3, 8, 12, 12)  # torso
-    paint_block(c, 0, 8, 2, 12)  # left arm
-    paint_block(c, 13, 8, 15, 12)  # right arm
-    paint_block(c, 4, 13, 6, 14)  # left leg
-    paint_block(c, 9, 13, 11, 14)  # right leg
-    row(c, 15, 4, "DDDDDDDD", CHAR_MAP)  # drop shadow, matches head width
-
-    if eyes in ("both", "left"):
-        c[(6, 3)] = FACE
-    if eyes in ("both", "right"):
-        c[(9, 3)] = FACE
-    return c
-
-
-POSE_DOWN = base_character("both")
-POSE_UP = base_character("none")
-POSE_LEFT = base_character("left")
-POSE_RIGHT = base_character("right")
-
-DIRECTIONS = {"down": POSE_DOWN, "up": POSE_UP, "left": POSE_LEFT, "right": POSE_RIGHT}
-
-IDLE_OFFSETS = [(0, 0), (0, -1)]
-WALK_OFFSETS = [(0, 0), (-1, -1), (0, 0), (1, -1)]
-
-
-def render_frame(pose: dict, dx: int, dy: int) -> Image.Image:
-    img = Image.new("RGBA", (LOGICAL, LOGICAL), TRANSPARENT)
-    px = img.load()
-    for (x, y), color in pose.items():
-        nx, ny = x + dx, y + dy
-        if 0 <= nx < LOGICAL and 0 <= ny < LOGICAL:
-            px[nx, ny] = color
-    return img.resize((FRAME, FRAME), Image.NEAREST)
-
-
-def build_character_frames():
-    frames = {}
-    for direction, pose in DIRECTIONS.items():
-        for i, (dx, dy) in enumerate(IDLE_OFFSETS):
-            frames[f"idle_{direction}_{i}"] = render_frame(pose, dx, dy)
-        for i, (dx, dy) in enumerate(WALK_OFFSETS):
-            frames[f"walk_{direction}_{i}"] = render_frame(pose, dx, dy)
-    return frames
 
 
 # --- tiles -------------------------------------------------------------------
@@ -408,15 +290,6 @@ def pack_sheet(frames: dict, cols: int, out_png: str, out_json: str):
 
 
 def main():
-    characters = build_character_frames()
-    assert len(characters) == 24, f"expected 24 character frames, got {len(characters)}"
-    pack_sheet(
-        characters,
-        cols=6,
-        out_png=os.path.join(OUT_DIR, "characters.png"),
-        out_json=os.path.join(OUT_DIR, "characters.json"),
-    )
-
     tiles = {key: builder() for key, builder in TILE_BUILDERS.items()}
     pack_sheet(
         tiles,
