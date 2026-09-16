@@ -10,5 +10,9 @@
   },
   "devDependencies": {
     "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "openai": "^4.104.0"
   }
 }

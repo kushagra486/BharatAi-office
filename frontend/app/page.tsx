@@ -25,7 +25,7 @@ const SESSION_ID = 'OFFICE-001';
 
 export default function Home() {
   const { ready } = useAuthGuard();
-  const { connected, agents, tasks, messages, escalations, memories, brief, agentOutputByAgent } = useHiveSocket();
+  const { connected, agents, tasks, messages, escalations, brief, agentOutputByAgent } = useHiveSocket();
   const usage = useLlmUsage();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [recallOpen, setRecallOpen] = useState(false);
@@ -69,7 +69,7 @@ export default function Home() {
         <ApprovalsDock escalations={escalations} onApprove={handleApprove} onDeny={handleDeny} />
       </div>
 
-      <MemoryRecallPanel open={recallOpen} onClose={() => setRecallOpen(false)} memories={memories} />
+      <MemoryRecallPanel open={recallOpen} onClose={() => setRecallOpen(false)} />
 
       <EmployeeSidePanel
         agent={selectedAgent}

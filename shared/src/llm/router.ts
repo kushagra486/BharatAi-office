@@ -1,8 +1,9 @@
 import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import type { LlmUsageByAgent, LlmUsageStats } from '@bharat-ai-office/shared';
+import type { LlmUsageByAgent, LlmUsageStats } from '../llm-types';
 import { assignmentFor, type ModelRef } from './assignments';
 import { getClient, isProviderConfigured } from './providers';
 import { acquireSlot, withRetry } from './rateLimiter';
+import { db } from '../supabaseHive';
 
 export interface ChatCompleteParams {
   messages: ChatCompletionMessageParam[];
@@ -11,18 +12,19 @@ export interface ChatCompleteParams {
   temperature?: number;
 }
 
-const usageByAgent = new Map<string, LlmUsageStats>();
-
-function recordUsage(agentId: string, ref: ModelRef, completion: ChatCompletion) {
-  const existing = usageByAgent.get(agentId);
+// Usage now lives in the `llm_usage` table (record_llm_usage does an
+// atomic upsert-with-increment) instead of an in-memory Map — Nova's calls
+// and the worker's employee calls are separate processes now, so they need
+// one shared, durable counter, not two independent in-memory ones.
+async function recordUsage(agentId: string, ref: ModelRef, completion: ChatCompletion): Promise<void> {
   const tokens = completion.usage?.total_tokens ?? 0;
-  usageByAgent.set(agentId, {
-    provider: ref.provider,
-    model: ref.model,
-    calls: (existing?.calls ?? 0) + 1,
-    approxTokens: (existing?.approxTokens ?? 0) + tokens,
-    lastCallAt: new Date().toISOString(),
+  const { error } = await db().rpc('record_llm_usage', {
+    p_agent_id: agentId,
+    p_provider: ref.provider,
+    p_model: ref.model,
+    p_tokens: tokens,
   });
+  if (error) throw new Error(error.message);
 }
 
 async function callModel(ref: ModelRef, params: ChatCompleteParams): Promise<ChatCompletion> {
@@ -53,7 +55,7 @@ export async function chatComplete(agentId: string, params: ChatCompleteParams):
 
   if (candidates.length === 0) {
     throw new Error(
-      `No configured LLM provider available for agent "${agentId}" — set at least one of NVIDIA_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY in .env.`
+      `No configured LLM provider available for agent "${agentId}" — set at least one of NVIDIA_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY in the environment.`
     );
   }
 
@@ -61,7 +63,7 @@ export async function chatComplete(agentId: string, params: ChatCompleteParams):
   for (const ref of candidates) {
     try {
       const completion = await callModel(ref, params);
-      recordUsage(agentId, ref, completion);
+      await recordUsage(agentId, ref, completion);
       return completion;
     } catch (err) {
       lastErr = err;
@@ -88,6 +90,18 @@ export async function chatCompleteJson(agentId: string, systemPrompt: string, us
   }
 }
 
-export function getUsage(): LlmUsageByAgent {
-  return Object.fromEntries(usageByAgent);
+export async function getUsage(): Promise<LlmUsageByAgent> {
+  const { data, error } = await db().from('llm_usage').select('*');
+  if (error) throw new Error(error.message);
+  const result: LlmUsageByAgent = {};
+  for (const row of data ?? []) {
+    result[row.agent_id as string] = {
+      provider: row.provider,
+      model: row.model,
+      calls: row.calls,
+      approxTokens: row.approx_tokens,
+      lastCallAt: row.last_call_at,
+    } satisfies LlmUsageStats;
+  }
+  return result;
 }

@@ -1,9 +1,12 @@
-import type { Escalation, LlmUsageByAgent, MemoryEntry } from '@bharat-ai-office/shared';
+import type { Agent, BriefRecord, Escalation, HiveMessage, LlmUsageByAgent, MemoryEntry, Task } from '@bharat-ai-office/shared';
 import { clearToken, getToken } from './authToken';
 
-export const DAEMON_HTTP_URL = process.env.NEXT_PUBLIC_DAEMON_HTTP_URL ?? 'http://localhost:4317';
+// Same-origin now — the API used to be a separate daemon process (a
+// different host/port), but it's now the Next.js app's own API routes
+// (frontend/app/api/**), deployed together as one Netlify site. No base
+// URL needed; relative paths resolve against wherever this app is served.
 
-/** A 401 from the daemon means the session token is missing/expired — drop it and send the viewer back to /login. */
+/** A 401 means the session token is missing/expired — drop it and send the viewer back to /login. */
 function handleUnauthorized(): void {
   clearToken();
   if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
@@ -13,7 +16,7 @@ function handleUnauthorized(): void {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
-  const res = await fetch(`${DAEMON_HTTP_URL}${path}`, {
+  const res = await fetch(path, {
     ...init,
     headers: {
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
@@ -27,7 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody.error ?? `daemon returned ${res.status}`);
+    throw new Error(errBody.error ?? `request failed: ${res.status}`);
   }
   return res.json() as Promise<T>;
 }
@@ -42,13 +45,13 @@ export interface AuthStatus {
 
 /** Unauthenticated by design — this is how a client learns whether it needs to log in at all. */
 export async function getAuthStatus(): Promise<AuthStatus> {
-  const res = await fetch(`${DAEMON_HTTP_URL}/api/auth/status`);
-  if (!res.ok) throw new Error(`daemon returned ${res.status}`);
+  const res = await fetch('/api/auth/status');
+  if (!res.ok) throw new Error(`request failed: ${res.status}`);
   return res.json() as Promise<AuthStatus>;
 }
 
 export async function login(password: string): Promise<string> {
-  const res = await fetch(`${DAEMON_HTTP_URL}/api/login`, {
+  const res = await fetch('/api/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password }),
@@ -84,4 +87,26 @@ export async function searchMemory(query: string): Promise<MemoryEntry[]> {
 
 export async function getLlmUsage(): Promise<LlmUsageByAgent> {
   return request<LlmUsageByAgent>('/api/llm/usage');
+}
+
+// One-shot fetches for the initial state, used by useHiveSocket before its
+// Supabase Realtime subscriptions take over for live updates.
+export async function listAgents(): Promise<Agent[]> {
+  return request<Agent[]>('/api/agents');
+}
+
+export async function listTasks(): Promise<Task[]> {
+  return request<Task[]>('/api/tasks');
+}
+
+export async function listMessages(): Promise<HiveMessage[]> {
+  return request<HiveMessage[]>('/api/messages');
+}
+
+export async function listEscalations(): Promise<Escalation[]> {
+  return request<Escalation[]>('/api/escalations');
+}
+
+export async function getBrief(): Promise<BriefRecord | null> {
+  return request<BriefRecord | null>('/api/brief');
 }

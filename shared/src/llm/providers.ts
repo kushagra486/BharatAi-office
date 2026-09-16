@@ -1,10 +1,9 @@
 import OpenAI from 'openai';
-import { env } from '../env';
 
 // All three providers expose an OpenAI-compatible chat completions API, so
 // one client class serves all of them — just a different baseURL/apiKey per
 // provider. This is the "one interface, many models" abstraction the
-// multi-provider migration is built around (see the plan's Context).
+// multi-provider migration is built around.
 export type ProviderId = 'nvidia' | 'groq' | 'openrouter';
 
 interface ProviderConfig {
@@ -36,7 +35,7 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
 const clients = new Map<ProviderId, OpenAI>();
 
 export function isProviderConfigured(provider: ProviderId): boolean {
-  return Boolean(env[PROVIDERS[provider].apiKeyEnv]);
+  return Boolean(process.env[PROVIDERS[provider].apiKeyEnv]);
 }
 
 /** Lazily constructs and memoizes one OpenAI client per provider. */
@@ -45,10 +44,10 @@ export function getClient(provider: ProviderId): OpenAI {
   if (existing) return existing;
 
   const config = PROVIDERS[provider];
-  const apiKey = env[config.apiKeyEnv];
+  const apiKey = process.env[config.apiKeyEnv];
   if (!apiKey) {
     throw new Error(
-      `LLM provider "${provider}" is not configured — set ${config.apiKeyEnv} in .env. See .env.example.`
+      `LLM provider "${provider}" is not configured — set ${config.apiKeyEnv} in the environment.`
     );
   }
 
