@@ -9,6 +9,14 @@ const WALK_LEG_MS = 1400; // time to walk each leg (home->table, table->home) �
 const DWELL_MS = 400; // pause at the review table — WALK_LEG_MS*2 + DWELL_MS = 3200ms, matching old WALK_DURATION_MS
 const ENVELOPE_FLIGHT_MS = 1600; // matches old OfficeFloor.tsx ENVELOPE_FLIGHT_MS
 
+// Idle "break" roaming — every few seconds, one idle (not working/blocked,
+// not already walking) employee wanders to a random break spot (water
+// cooler, plant, bookshelf, printer) and back, so the office reads as
+// lived-in even when no task is in flight.
+const ROAM_DWELL_MS = 1400; // longer pause than a review-table handoff — this is a break, not a drop-off
+const ROAM_MIN_INTERVAL_MS = 4500;
+const ROAM_MAX_INTERVAL_MS = 9000;
+
 // Department -> the floor rug tinting its desk cluster sits on, so the room
 // reads as distinct zones even though desks are laid out in two plain rows
 // (see FRONTEND_VISION.md §2). Nova's tile already gets its own violet
@@ -42,6 +50,13 @@ const DECOR_PROPS: { col: number; row: number; key: TileKey }[] = [
   { col: 27, row: 13, key: 'bookshelf' },
 ];
 
+// Every decor prop doubles as a "break spot" idle employees can wander to —
+// derived from the same fixed layout so the two never drift out of sync.
+const BREAK_SPOTS: PixelPoint[] = DECOR_PROPS.map((p) => ({
+  x: p.col * TILE_SIZE + TILE_SIZE / 2,
+  y: p.row * TILE_SIZE + TILE_SIZE / 2,
+}));
+
 function easeInOut(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
@@ -58,10 +73,11 @@ function directionOf(from: PixelPoint, to: PixelPoint): Direction {
 }
 
 interface WalkState {
-  phase: 'toTable' | 'atTable' | 'toHome';
+  phase: 'toTarget' | 'atTarget' | 'toHome';
   elapsedMs: number;
   homePx: PixelPoint;
-  tablePx: PixelPoint;
+  targetPx: PixelPoint;
+  dwellMs: number;
   direction: Direction;
 }
 
@@ -86,12 +102,16 @@ export class OfficeScene {
   private effectsLayer = new Container();
   private tickerFn: (ticker: Ticker) => void;
   private ambientT = 0;
-  private tableAura!: Graphics;
   private novaAura: Graphics | null = null;
+  private statuses = new Map<string, TaskStatus>();
+  private roamElapsedMs = 0;
+  private nextRoamAtMs = ROAM_MIN_INTERVAL_MS + Math.random() * (ROAM_MAX_INTERVAL_MS - ROAM_MIN_INTERVAL_MS);
+  private wiresGraphic!: Graphics;
+  private wirePhasePx = 0;
 
   constructor(
     private assets: OfficeAssets,
-    agents: Agent[],
+    private agents: Agent[],
     onSelectAgent: (agentId: string) => void
   ) {
     const floorLayer = this.buildFloorLayer(agents);
@@ -125,6 +145,7 @@ export class OfficeScene {
 
   /** Push a status update (idle/working/blocked/done) for one agent's status dot. */
   setAgentStatus(agentId: string, status: TaskStatus): void {
+    this.statuses.set(agentId, status);
     this.characters.get(agentId)?.setStatus(status);
   }
 
@@ -134,22 +155,37 @@ export class OfficeScene {
    * OfficeFloor.tsx's useEffect).
    */
   walkAgentToReviewTable(agentId: string, homePct: PercentPoint): void {
+    this.startWalk(agentId, homePct, toPixel(REVIEW_TABLE_POSITION), DWELL_MS);
+  }
+
+  /**
+   * The one walk state-machine backing both real review-table trips and
+   * idle "break" roams (see `tickRoaming`) — same lerp/ease/dwell mechanics,
+   * just a different target point and dwell time. A no-op if the agent is
+   * already mid-walk, so a roam attempt never interrupts a real trip (or
+   * vice versa).
+   */
+  private startWalk(agentId: string, homePct: PercentPoint, targetPx: PixelPoint, dwellMs: number): void {
     if (this.walkStates.has(agentId)) return;
     const homePx = toPixel(homePct);
-    const tablePx = toPixel(REVIEW_TABLE_POSITION);
     this.walkStates.set(agentId, {
-      phase: 'toTable',
+      phase: 'toTarget',
       elapsedMs: 0,
       homePx,
-      tablePx,
-      direction: directionOf(homePx, tablePx),
+      targetPx,
+      dwellMs,
+      direction: directionOf(homePx, targetPx),
     });
   }
 
-  /** Fires a short-lived tinted dot from one agent's desk to another's (or the table), for message:new. */
+  /** Fires a short-lived tinted "packet" from one agent's desk to another's (or the table), for message:new. */
   spawnEnvelope(fromPct: PercentPoint, toPct: PercentPoint, messageType: MessageType): void {
+    const color = MESSAGE_COLOR[messageType];
     const graphic = new Graphics();
-    graphic.circle(0, 0, 4).fill(MESSAGE_COLOR[messageType]);
+    // A soft outer glow halo behind the core dot reads more like a moving
+    // packet of information than a flat dot flying across the floor.
+    graphic.circle(0, 0, 8).fill({ color, alpha: 0.28 });
+    graphic.circle(0, 0, 3.5).fill(color);
     const fromPx = toPixel(fromPct);
     graphic.position.set(fromPx.x, fromPx.y);
     this.effectsLayer.addChild(graphic);
@@ -167,14 +203,40 @@ export class OfficeScene {
     this.tickWalks(deltaMS);
     this.tickEnvelopes(deltaMS);
     this.tickAmbient(deltaMS);
+    this.tickRoaming(deltaMS);
+    this.tickWires(deltaMS);
   }
 
-  /** A slow "breathing" glow under the review table and Nova's office — a
-   * modern ambient-light touch so the room reads as alive even when idle. */
+  /**
+   * Every few seconds, sends one random idle employee on a walk to a random
+   * break spot (water cooler, plant, bookshelf, printer) and back — purely
+   * cosmetic "office feels alive" behavior, gated on real status so it never
+   * runs on a working/blocked agent or interrupts a real review-table trip.
+   */
+  private tickRoaming(deltaMS: number): void {
+    this.roamElapsedMs += deltaMS;
+    if (this.roamElapsedMs < this.nextRoamAtMs) return;
+    this.roamElapsedMs = 0;
+    this.nextRoamAtMs = ROAM_MIN_INTERVAL_MS + Math.random() * (ROAM_MAX_INTERVAL_MS - ROAM_MIN_INTERVAL_MS);
+
+    const idleAgents = this.agents.filter(
+      (a) => a.id !== 'nova' && (this.statuses.get(a.id) ?? 'idle') === 'idle' && !this.walkStates.has(a.id)
+    );
+    if (idleAgents.length === 0) return;
+    const agent = idleAgents[Math.floor(Math.random() * idleAgents.length)];
+    const spot = BREAK_SPOTS[Math.floor(Math.random() * BREAK_SPOTS.length)];
+    this.startWalk(agent.id, { x: agent.home_x, y: agent.home_y }, spot, ROAM_DWELL_MS);
+  }
+
+  /** Advances the marching-ants phase on the desk->table wires so information reads as continuously flowing, not static. */
+  private tickWires(deltaMS: number): void {
+    this.wirePhasePx += deltaMS * 0.02;
+    this.redrawWires();
+  }
+
+  /** A slow "breathing" glow at Nova's office — a modern ambient-light touch so the room reads as alive even when idle. */
   private tickAmbient(deltaMS: number): void {
     this.ambientT += deltaMS * 0.0015;
-    this.tableAura.alpha = 0.55 + Math.sin(this.ambientT) * 0.25;
-    this.tableAura.scale.set(0.88 + Math.sin(this.ambientT) * 0.12);
     if (this.novaAura) {
       const phase = this.ambientT * 0.85 + 1.2;
       this.novaAura.alpha = 0.5 + Math.sin(phase) * 0.22;
@@ -191,25 +253,25 @@ export class OfficeScene {
       }
       state.elapsedMs += deltaMS;
 
-      if (state.phase === 'toTable') {
+      if (state.phase === 'toTarget') {
         const t = Math.min(1, state.elapsedMs / WALK_LEG_MS);
-        const pos = lerp(state.homePx, state.tablePx, easeInOut(t));
+        const pos = lerp(state.homePx, state.targetPx, easeInOut(t));
         character.setPosition(pos.x, pos.y);
         character.setMotion(state.direction, true);
         if (t >= 1) {
-          state.phase = 'atTable';
+          state.phase = 'atTarget';
           state.elapsedMs = 0;
         }
-      } else if (state.phase === 'atTable') {
+      } else if (state.phase === 'atTarget') {
         character.setMotion(state.direction, false);
-        if (state.elapsedMs >= DWELL_MS) {
+        if (state.elapsedMs >= state.dwellMs) {
           state.phase = 'toHome';
           state.elapsedMs = 0;
-          state.direction = directionOf(state.tablePx, state.homePx);
+          state.direction = directionOf(state.targetPx, state.homePx);
         }
       } else {
         const t = Math.min(1, state.elapsedMs / WALK_LEG_MS);
-        const pos = lerp(state.tablePx, state.homePx, easeInOut(t));
+        const pos = lerp(state.targetPx, state.homePx, easeInOut(t));
         character.setPosition(pos.x, pos.y);
         character.setMotion(state.direction, true);
         if (t >= 1) {
@@ -292,15 +354,9 @@ export class OfficeScene {
     return layer;
   }
 
-  /** Soft under-glow auras — amber breathing light at the review table, violet at Nova's office. */
+  /** Soft violet under-glow aura at Nova's office. */
   private buildAmbientLayer(agents: Agent[]): Container {
     const layer = new Container();
-
-    const tablePx = toPixel(REVIEW_TABLE_POSITION);
-    this.tableAura = new Graphics().circle(0, 0, 30).fill(0xffb454);
-    this.tableAura.alpha = 0.3;
-    this.tableAura.position.set(tablePx.x, tablePx.y);
-    layer.addChild(this.tableAura);
 
     const nova = agents.find((a) => a.id === 'nova');
     if (nova) {
@@ -326,13 +382,9 @@ export class OfficeScene {
       layer.addChild(tile);
     }
 
-    const tablePos = toTile(REVIEW_TABLE_POSITION);
-    const table = new Sprite(this.assets.tiles.review_table);
-    table.anchor.set(0.5, 0.5);
-    table.scale.set(1.6);
-    table.position.set(tablePos.col * TILE_SIZE + TILE_SIZE / 2, tablePos.row * TILE_SIZE + TILE_SIZE / 2);
-    layer.addChild(table);
-
+    // No visible marker at REVIEW_TABLE_POSITION by design — agents still
+    // walk there on task completion (walkAgentToReviewTable) and the wires
+    // still flow toward it, but the spot itself is left as open floor.
     for (const prop of DECOR_PROPS) {
       const sprite = new Sprite(this.assets.tiles[prop.key]);
       sprite.anchor.set(0.5, 0.5);
@@ -340,32 +392,44 @@ export class OfficeScene {
       layer.addChild(sprite);
     }
 
-    // Dashed wire from each employee desk to the review table — ported
-    // from OfficeFloor.tsx's SVG <line strokeDasharray>.
-    const wires = new Graphics();
-    for (const agent of agents) {
-      if (agent.id === 'nova') continue;
-      this.drawDashedLine(wires, toPixel({ x: agent.home_x, y: agent.home_y }), toPixel(REVIEW_TABLE_POSITION));
-    }
-    layer.addChildAt(wires, 0);
+    // Dashed wire from each employee desk to the review table, animated in
+    // `redrawWires` (called from `tickWires`) so it reads as information
+    // continuously flowing toward the table rather than a static line.
+    this.wiresGraphic = new Graphics();
+    layer.addChildAt(this.wiresGraphic, 0);
+    this.redrawWires();
 
     return layer;
   }
 
-  private drawDashedLine(g: Graphics, from: PixelPoint, to: PixelPoint): void {
+  /** Redraws the desk->table wires with the current marching-ants phase — cheap enough to call every tick at this scale (10 short dashed lines). */
+  private redrawWires(): void {
+    this.wiresGraphic.clear();
+    for (const agent of this.agents) {
+      if (agent.id === 'nova') continue;
+      this.drawDashedLine(this.wiresGraphic, toPixel({ x: agent.home_x, y: agent.home_y }), toPixel(REVIEW_TABLE_POSITION), this.wirePhasePx);
+    }
+  }
+
+  private drawDashedLine(g: Graphics, from: PixelPoint, to: PixelPoint, phasePx: number): void {
     const dashLen = 6;
     const gapLen = 8;
+    const cycle = dashLen + gapLen;
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const dist = Math.hypot(dx, dy);
-    const steps = Math.floor(dist / (dashLen + gapLen));
     const ux = dx / dist;
     const uy = dy / dist;
-    for (let i = 0; i < steps; i++) {
-      const start = i * (dashLen + gapLen);
-      const end = start + dashLen;
-      g.moveTo(from.x + ux * start, from.y + uy * start);
-      g.lineTo(from.x + ux * end, from.y + uy * end);
+    // Shifting the pattern's start by `phasePx` each tick makes the dashes
+    // appear to crawl from the desk toward the table — a constant, ambient
+    // "information flowing toward review" signal even with no real message.
+    const offset = ((phasePx % cycle) + cycle) % cycle;
+    for (let start = -offset; start < dist; start += cycle) {
+      const segStart = Math.max(0, start);
+      const segEnd = Math.min(dist, start + dashLen);
+      if (segEnd <= segStart) continue;
+      g.moveTo(from.x + ux * segStart, from.y + uy * segStart);
+      g.lineTo(from.x + ux * segEnd, from.y + uy * segEnd);
     }
     g.stroke({ width: 1, color: 0x1d2836 });
   }

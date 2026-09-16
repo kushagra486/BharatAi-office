@@ -177,10 +177,12 @@ function drawTile(key: TileKey): Graphics {
   const s = FRAME_SIZE;
   switch (key) {
     case 'floor_a':
-      g.rect(0, 0, s, s).fill(0x141b26).stroke({ width: 1, color: 0x1d2836 });
+      // No stroke — adjacent tiles should blend into one continuous floor
+      // rather than reading as a visible grid (see generate-pixel-art.py).
+      g.rect(0, 0, s, s).fill(0x141b26);
       break;
     case 'floor_b':
-      g.rect(0, 0, s, s).fill(0x121822).stroke({ width: 1, color: 0x1d2836 });
+      g.rect(0, 0, s, s).fill(0x121822);
       break;
     case 'wall_edge':
       g.rect(0, 0, s, s).fill(0x0a0e14).rect(0, 0, s, 6).fill(0x1d2836);

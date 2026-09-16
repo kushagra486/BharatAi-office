@@ -3,8 +3,17 @@ import type { Agent, TaskStatus } from '@bharat-ai-office/shared';
 type WalkerStatus = TaskStatus;
 
 const TOKEN_HEX: Record<string, string> = {
-  '--cyan': '#2FE6D2',
   '--violet': '#8B7CF6',
+  '--red': '#FF4D4D',
+  '--orange': '#FF9433',
+  '--gold': '#FFD23F',
+  '--lime': '#A8E62E',
+  '--emerald': '#2ECC71',
+  '--cyan': '#2FE6D2',
+  '--sky': '#38BDF8',
+  '--blue': '#5B7FFF',
+  '--pink': '#FF4FC3',
+  '--rose': '#FF4D79',
   '--amber': '#FFB454',
   '--magenta': '#FF4D6D',
   '--green': '#4ADE80',

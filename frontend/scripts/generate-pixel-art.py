@@ -201,11 +201,13 @@ def grid_to_image(grid) -> Image.Image:
 
 
 def build_tile_floor_a():
+    # No border() here on purpose: adjacent floor tiles should blend into one
+    # continuous surface (a real floor, not visible grid squares) — only the
+    # alternating floor_a/floor_b base tone and this dither texture carry
+    # definition. Deterministic dither noise (a fixed pixel set, not
+    # randomized, so rebuilds are reproducible) for a chunkier block-texture
+    # feel instead of a perfectly flat fill.
     g = tile_canvas()
-    border(g, TOK_LINE_SOFT)
-    # deterministic dither noise (a fixed pixel set, not randomized, so
-    # rebuilds are reproducible) — a chunkier, blockier block-texture feel
-    # instead of a perfectly flat fill.
     for x, y in [(2, 2), (9, 3), (13, 4), (5, 8), (10, 10), (3, 12), (12, 13)]:
         g[y][x] = TOK_LINE_SOFT
     for x, y in [(6, 6), (12, 9)]:
@@ -214,9 +216,8 @@ def build_tile_floor_a():
 
 
 def build_tile_floor_b():
+    # See build_tile_floor_a — no border() so tiles blend seamlessly.
     g = [[TOK_PANEL_ALT for _ in range(LOGICAL)] for _ in range(LOGICAL)]
-    border(g, TOK_LINE_SOFT)
-    # a scatter of subtle flecks so it doesn't read as perfectly flat
     for x, y in [(4, 5), (11, 9), (7, 12), (2, 3), (13, 6), (9, 2), (5, 13), (12, 11)]:
         g[y][x] = TOK_LINE
     for x, y in [(8, 8), (3, 9)]:

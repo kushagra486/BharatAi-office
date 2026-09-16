@@ -5,10 +5,24 @@ import type { Direction, OfficeAssets } from './assets';
 
 // Numeric tint per agent color token — the Pixi-friendly counterpart to
 // WalkerAvatar.tsx's TOKEN_HEX map (kept in frontend/components/office/,
-// unchanged there). Same keys, same colors.
+// unchanged there). Same keys, same colors. Spread widely around the hue
+// wheel (see shared/src/roster.ts) so every one of the 11 agents reads as a
+// distinct, vivid, "glowing" color under the grayscale rig's `.tint`
+// multiply — not the old 5-color palette that forced several agents to
+// share an identical color.
 const TOKEN_TINT: Record<string, number> = {
-  '--cyan': 0x2fe6d2,
   '--violet': 0x8b7cf6,
+  '--red': 0xff4d4d,
+  '--orange': 0xff9433,
+  '--gold': 0xffd23f,
+  '--lime': 0xa8e62e,
+  '--emerald': 0x2ecc71,
+  '--cyan': 0x2fe6d2,
+  '--sky': 0x38bdf8,
+  '--blue': 0x5b7fff,
+  '--pink': 0xff4fc3,
+  '--rose': 0xff4d79,
+  // legacy tokens kept for anything still referencing the old 5-color set.
   '--amber': 0xffb454,
   '--magenta': 0xff4d6d,
   '--green': 0x4ade80,

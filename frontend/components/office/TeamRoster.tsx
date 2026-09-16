@@ -3,6 +3,8 @@ import { STATUS_COLOR } from '@bharat-ai-office/shared';
 import { agentStatus, currentTaskFor, tasksByAgentMap } from '@/lib/agentStatus';
 import { formatTokenCount } from '@/lib/format';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
+import { useTokenHistory } from '@/hooks/useTokenHistory';
+import { TokenSparkline } from './TokenSparkline';
 
 export interface TeamRosterProps {
   agents: Agent[];
@@ -45,6 +47,7 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
     return acc;
   }, {});
   const animatedTotalTokens = useAnimatedNumber(totalTokens);
+  const tokenHistory = useTokenHistory(totalTokens);
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-l border-line bg-panel lg:flex">
@@ -59,9 +62,14 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
           )}
         </div>
         {totalCalls > 0 && (
-          <div className="mt-1.5 font-mono text-[10px] tabular-nums text-[#6B7686]" title={Object.entries(byProvider).map(([p, t]) => `${p}: ${t.toLocaleString()} tok`).join(' · ')}>
-            ⚡ {formatTokenCount(animatedTotalTokens)} tokens · {totalCalls} calls
-          </div>
+          <>
+            <div className="mt-1.5 font-mono text-[10px] tabular-nums text-[#6B7686]" title={Object.entries(byProvider).map(([p, t]) => `${p}: ${t.toLocaleString()} tok`).join(' · ')}>
+              ⚡ {formatTokenCount(animatedTotalTokens)} tokens · {totalCalls} calls
+            </div>
+            <div className="mt-1.5">
+              <TokenSparkline data={tokenHistory} />
+            </div>
+          </>
         )}
       </div>
       <div className="flex-1 overflow-y-auto">
