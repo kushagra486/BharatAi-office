@@ -13,14 +13,12 @@ import { EmployeeSidePanel } from '@/components/office/EmployeeSidePanel';
 import { TeamRoster } from '@/components/office/TeamRoster';
 import { TeamActivity } from '@/components/office/TeamActivity';
 
-// Pixel-art office floor (see /root/.claude/plans/synchronous-yawning-unicorn.md).
-// Client-only: it owns a PIXI.Application (WebGL/canvas), so it's kept out
-// of the server render even though it doesn't strictly require ssr:false
-// today (see the migration's build notes).
-const OfficeFloorPixel = dynamic(
-  () => import('@/components/office-pixel/OfficeFloorPixel').then((m) => m.OfficeFloorPixel),
-  { ssr: false }
-);
+// Real-time 3D office floor — a Three.js scene with the team's actual 3D
+// character models and CC0 furniture props (see components/office-3d/).
+// Client-only: it owns a WebGLRenderer, so it's kept out of the server render.
+const OfficeFloor3D = dynamic(() => import('@/components/office-3d/OfficeFloor3D').then((m) => m.OfficeFloor3D), {
+  ssr: false,
+});
 
 const SESSION_ID = 'OFFICE-001';
 
@@ -56,7 +54,7 @@ export default function Home() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex flex-1 overflow-hidden">
           <div className="flex flex-1 flex-col p-4">
-            <OfficeFloorPixel agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
+            <OfficeFloor3D agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
           </div>
           <TeamRoster agents={agents} tasks={tasks} usage={usage} selectedAgentId={selectedAgentId} onSelectAgent={setSelectedAgentId} />
         </div>
