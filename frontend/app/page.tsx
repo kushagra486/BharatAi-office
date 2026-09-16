@@ -51,8 +51,8 @@ export default function Home() {
       />
       <BriefStrip brief={brief} onSubmitBrief={submitBrief} />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-none flex-col overflow-hidden lg:flex-1">
+        <div className="flex flex-none overflow-hidden lg:flex-1">
           <div className="flex flex-1 flex-col p-4">
             <OfficeFloor3D agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
           </div>
