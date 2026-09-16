@@ -18,11 +18,20 @@ import type {
 // migration's `alter publication supabase_realtime add table ...`), so
 // subscribers get updates from the database itself, not from this module.
 //
-// Uses the service_role key, which bypasses Row Level Security — this
+// Prefers the service_role key, which bypasses Row Level Security — this
 // module must only ever run server-side (Next.js API routes, the
 // persistent worker), never in browser code. SUPABASE_SERVICE_ROLE_KEY is
 // deliberately not prefixed NEXT_PUBLIC_ so Next.js keeps it out of the
 // client bundle.
+//
+// Falls back to the anon/publishable key when the service role key isn't
+// configured yet, so read-only routes (agents/tasks/messages/escalations/
+// brief/memory — every table with a "public read" RLS policy from the
+// initial_hive_schema migration) keep working in a degraded read-only mode
+// instead of 500ing outright. Anything that writes, or reads a
+// service-role-only table (sessions, rate_limit_windows, llm_usage), still
+// fails under RLS until the real service role key is set — that failure is
+// expected and correctly surfaces the missing secret rather than masking it.
 let client: SupabaseClient | null = null;
 
 /** Shared across every server-side module that needs Postgres (auth.ts, rateLimiter.ts, this file) — one client, one connection pool. */
@@ -30,10 +39,18 @@ export function db(): SupabaseClient {
   if (client) return client;
   const url = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (server-side only)');
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = serviceRoleKey || anonKey;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and (SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) must be set (server-side only)');
   }
-  client = createClient(url, serviceRoleKey, { auth: { persistSession: false } });
+  if (!serviceRoleKey) {
+    console.warn(
+      '[supabaseHive] SUPABASE_SERVICE_ROLE_KEY is not set — falling back to the anon key. ' +
+        'Reads on publicly-readable tables work via RLS; writes and service-role-only tables will fail until the real key is configured.'
+    );
+  }
+  client = createClient(url, key, { auth: { persistSession: false } });
   return client;
 }
 
