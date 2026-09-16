@@ -65,6 +65,14 @@ export interface OfficeAssets {
    * This is what lets you replace avatars one at a time without redoing all 11.
    */
   characterFramesByAgent: Partial<Record<string, Record<CharacterFrameKey, Texture>>>;
+  /**
+   * Real profile photos, keyed by roster id, loaded from
+   * `/office-pixel/portraits/{agentId}.png` (the same files AgentAvatar.tsx
+   * uses in the roster/side panel). When present, CharacterSprite renders
+   * the agent as a circular photo token on the floor instead of the
+   * animated blocky rig — see ASSETS.md "Dashboard profile photos".
+   */
+  portraitTextures: Partial<Record<string, Texture>>;
   tiles: Record<TileKey, Texture>;
   /** True when the procedural placeholder was used because no real shared sheet was found. */
   isPlaceholder: boolean;
@@ -80,9 +88,13 @@ export interface OfficeAssets {
  * or all 11 agents have custom art dropped in.
  */
 export async function loadOfficeAssets(renderer: Renderer): Promise<OfficeAssets> {
-  const [real, characterFramesByAgent] = await Promise.all([tryLoadRealAssets(), loadPerAgentSheets()]);
+  const [real, characterFramesByAgent, portraitTextures] = await Promise.all([
+    tryLoadRealAssets(),
+    loadPerAgentSheets(),
+    loadPortraitTextures(),
+  ]);
   const base = real ?? buildPlaceholderAssets(renderer);
-  return { ...base, characterFramesByAgent, isPlaceholder: real === null };
+  return { ...base, characterFramesByAgent, portraitTextures, isPlaceholder: real === null };
 }
 
 async function loadPerAgentSheets(): Promise<Partial<Record<string, Record<CharacterFrameKey, Texture>>>> {
@@ -100,7 +112,21 @@ async function loadPerAgentSheets(): Promise<Partial<Record<string, Record<Chara
   return result;
 }
 
-type BaseAssets = Omit<OfficeAssets, 'isPlaceholder' | 'characterFramesByAgent'>;
+async function loadPortraitTextures(): Promise<Partial<Record<string, Texture>>> {
+  const result: Partial<Record<string, Texture>> = {};
+  await Promise.all(
+    ROSTER.map(async (agent) => {
+      try {
+        result[agent.id] = await Assets.load<Texture>(`/office-pixel/portraits/${agent.id}.png`);
+      } catch {
+        // Expected until a portrait for this agent is dropped in — not an error.
+      }
+    })
+  );
+  return result;
+}
+
+type BaseAssets = Omit<OfficeAssets, 'isPlaceholder' | 'characterFramesByAgent' | 'portraitTextures'>;
 
 async function tryLoadRealAssets(): Promise<BaseAssets | null> {
   try {

@@ -115,18 +115,26 @@ frontend/public/office-pixel/characters/<agentId>.png
   glance rather than one shape recolored 11 times. `AGENTS` in that script
   is the place to swap in a new accessory function per agent or add more.
 
-## Dashboard profile photos (separate from the floor sprites)
+## Profile photos — used on both the dashboard and the floor
 
-`frontend/public/office-pixel/portraits/<agentId>.png` — a real photo/portrait
-shown as a circular avatar in `TeamRoster` and `EmployeeSidePanel`
-(`AgentAvatar.tsx`), independent of the floor's walking sprite. This is a
-plain square image, not a 24-frame atlas — one file per agent, any
-reasonable size (the current set is 128×128). `AgentAvatar` falls back to
-an initial-letter badge in the agent's identity color
-(`frontend/lib/agentColor.ts`) if `<agentId>.png` 404s, so an agent
-without a portrait yet (e.g. `nova`, pending the correct source image) just
-shows the badge instead of a broken image icon — no code change needed to
-add one later.
+`frontend/public/office-pixel/portraits/<agentId>.png` — a real photo/portrait,
+one plain square PNG per agent (any reasonable size; the current set is
+128×128), not a 24-frame atlas. It's loaded and used in two places:
+
+- **Dashboard** (`AgentAvatar.tsx`): a circular avatar in `TeamRoster` and
+  `EmployeeSidePanel`. Falls back to an initial-letter badge in the
+  agent's identity color (`frontend/lib/agentColor.ts`) if `<agentId>.png`
+  404s, so a missing portrait never renders as a broken image icon.
+- **Floor** (`assets.ts`'s `loadPortraitTextures()` +
+  `CharacterSprite.ts`): when a portrait exists for an agent, that same
+  file is rendered as a circular masked token (with an identity-color
+  ring) walking/idling on the office floor, **instead of** the blocky
+  pixel-art rig. Since it's a single static image rather than a 24-frame
+  walk cycle, motion is a vertical bob (bigger while walking) rather than
+  a leg-swing animation. An agent without a portrait keeps using the
+  blocky rig (shared tinted, or its own custom sheet — see "Per-agent
+  custom sprites" above) with full walk-cycle animation, so the two
+  render paths coexist per-agent with no configuration needed either way.
 
 ## Full asset inventory
 
