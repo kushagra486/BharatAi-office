@@ -25,16 +25,20 @@ export interface Assignment {
 // - OpenRouter (nvidia/nemotron-3-super-120b-a12b:free,
 //   nex-agi/nex-n2.5-pro:free, liquid/lfm-2.5-2.6b:free): CONFIRMED
 //   working — real 200 responses, JSON mode and tool-calling both good.
-// - NVIDIA NIM (meta/llama-3.2-11b-vision-instruct): CONFIRMED working —
-//   this is the one model out of a dozen+ tried that this account can
-//   actually invoke (JSON mode + tool-calling both good). Every other NIM
-//   slug either 404'd with "Function ... Not found for account" (an
-//   account-entitlement gap — build.nvidia.com's per-model "Get API Key"
-//   grants access one model at a time, separate from just holding a valid
-//   key) or 410'd as retired. If more NIM models get access-granted later,
-//   re-verify with a real curl call before swapping them in here — several
-//   models this account's own /v1/models listing returns still aren't
-//   actually invocable.
+// - NVIDIA NIM: build.nvidia.com's per-model "Get API Key" grants ACCOUNT
+//   access one model at a time (confirmed: a key generated on one model's
+//   page also works for every other model already granted — it's not a
+//   per-key scope, any valid key for the account works for anything the
+//   account has been granted). Three models confirmed actually invocable
+//   for this account so far (real 200s, JSON mode + tool-calling both
+//   good): meta/llama-3.2-11b-vision-instruct, z-ai/glm-5.3, z-ai/glm-5.3-
+//   flash — spread across the roster below instead of reusing just one.
+//   moonshotai/kimi-k3 consistently times out (30-40s, no response) and
+//   nvidia/nemotron-3.5-lightning-30b-a3b returns HTTP 200 but garbled
+//   nonsense content — both deliberately left out, not just unverified.
+//   Every other NIM slug either 404'd ("Function ... Not found for
+//   account" — not yet granted) or 410'd as retired. Re-verify with a
+//   real curl call before adding any new NIM model here.
 export const ASSIGNMENTS: Record<string, Assignment> = {
   nova: {
     primary: { provider: 'groq', model: 'openai/gpt-oss-120b' },
@@ -44,14 +48,14 @@ export const ASSIGNMENTS: Record<string, Assignment> = {
     ],
   },
   kael: {
-    primary: { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+    primary: { provider: 'nvidia', model: 'z-ai/glm-5.3' },
     fallbacks: [
       { provider: 'groq', model: 'openai/gpt-oss-120b' },
       { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
     ],
   },
   priya: {
-    primary: { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+    primary: { provider: 'nvidia', model: 'z-ai/glm-5.3-flash' },
     fallbacks: [
       { provider: 'groq', model: 'openai/gpt-oss-20b' },
       { provider: 'openrouter', model: 'nex-agi/nex-n2.5-pro:free' },
@@ -65,14 +69,14 @@ export const ASSIGNMENTS: Record<string, Assignment> = {
     ],
   },
   simran: {
-    primary: { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+    primary: { provider: 'nvidia', model: 'z-ai/glm-5.3' },
     fallbacks: [
       { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
       { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
   arjun: {
-    primary: { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+    primary: { provider: 'nvidia', model: 'z-ai/glm-5.3-flash' },
     fallbacks: [
       { provider: 'groq', model: 'openai/gpt-oss-20b' },
       { provider: 'openrouter', model: 'nex-agi/nex-n2.5-pro:free' },
@@ -88,14 +92,14 @@ export const ASSIGNMENTS: Record<string, Assignment> = {
   raghav: {
     primary: { provider: 'groq', model: 'openai/gpt-oss-20b' },
     fallbacks: [
-      { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+      { provider: 'nvidia', model: 'z-ai/glm-5.3' },
       { provider: 'openrouter', model: 'nex-agi/nex-n2.5-pro:free' },
     ],
   },
   tanya: {
     primary: { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
     fallbacks: [
-      { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+      { provider: 'nvidia', model: 'z-ai/glm-5.3-flash' },
       { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
@@ -109,7 +113,7 @@ export const ASSIGNMENTS: Record<string, Assignment> = {
   isha: {
     primary: { provider: 'openrouter', model: 'liquid/lfm-2.5-2.6b:free' },
     fallbacks: [
-      { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+      { provider: 'nvidia', model: 'z-ai/glm-5.3' },
       { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
