@@ -44,7 +44,7 @@ export default function DashboardPage() {
 
         <AgentMeshGraph agents={agents} messages={messages} />
 
-        <AgentRosterGrid agents={agents} />
+        <AgentRosterGrid agents={agents} usage={usage} />
       </div>
     </main>
   );

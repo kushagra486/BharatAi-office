@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import type { Agent, HiveMessage, Task, TaskStatus } from '@bharat-ai-office/shared';
+import type { Agent, HiveMessage, LlmUsageByAgent, Task, TaskStatus } from '@bharat-ai-office/shared';
 import { agentStatus, tasksByAgentMap } from '@/lib/agentStatus';
 import { loadOffice3DAssets, type Office3DAssets } from './assets3d';
 import { OfficeScene3D } from './OfficeScene3D';
@@ -12,10 +12,11 @@ export interface OfficeFloor3DProps {
   agents: Agent[];
   tasks: Task[];
   messages: HiveMessage[];
+  usage: LlmUsageByAgent;
   onSelectAgent: (agentId: string) => void;
 }
 
-export function OfficeFloor3D({ agents, tasks, messages, onSelectAgent }: OfficeFloor3DProps) {
+export function OfficeFloor3D({ agents, tasks, messages, usage, onSelectAgent }: OfficeFloor3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -112,6 +113,7 @@ export function OfficeFloor3D({ agents, tasks, messages, onSelectAgent }: Office
     const tasksByAgent = tasksByAgentMap(tasks);
     for (const agent of agents) {
       scene.setAgentStatus(agent.id, agent.id === 'nova' ? 'idle' : agentStatus(agent.id, tasksByAgent));
+      scene.setAgentProvider(agent.id, usage[agent.id]?.provider);
     }
 
     for (const task of tasks) {
@@ -137,7 +139,7 @@ export function OfficeFloor3D({ agents, tasks, messages, onSelectAgent }: Office
         scene.walkAgentToColleague(from.id, { x: from.home_x, y: from.home_y }, { x: to.home_x, y: to.home_y }, m.type);
       }
     }
-  }, [ready, agents, tasks, messages]);
+  }, [ready, agents, tasks, messages, usage]);
 
   return (
     <div ref={containerRef} className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-line bg-panel">

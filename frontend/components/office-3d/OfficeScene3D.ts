@@ -199,6 +199,10 @@ export class OfficeScene3D {
     this.characters.get(agentId)?.setStatus(status);
   }
 
+  setAgentProvider(agentId: string, provider: string | undefined): void {
+    this.characters.get(agentId)?.setProvider(provider);
+  }
+
   walkAgentToReviewTable(agentId: string, homePct: PercentPoint): void {
     this.startTrip(agentId, toWorld(homePct), [{ pos: REVIEW_TABLE_WORLD, dwellMs: DWELL_MS }]);
   }

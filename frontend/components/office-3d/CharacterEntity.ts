@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Agent, TaskStatus } from '@bharat-ai-office/shared';
 import { STATUS_COLOR } from '@bharat-ai-office/shared';
 import { agentColorHex } from '@/lib/agentColor';
+import { providerColorHex } from '@/lib/providerColor';
 import { cloneWithMaterials } from './assets3d';
 import { badgeTexture, dotTexture } from './badgeTextures';
 
@@ -24,6 +25,7 @@ export class CharacterEntity {
 
   private readonly model: THREE.Object3D;
   private readonly statusDot: THREE.Sprite;
+  private readonly providerDot: THREE.Sprite;
   private targetYaw = 0;
   private pulseT = 0;
   private status: TaskStatus = 'idle';
@@ -60,6 +62,16 @@ export class CharacterEntity {
     this.statusDot.position.set(-0.32, CHARACTER_TARGET_HEIGHT + 0.5, 0);
     this.root.add(this.statusDot);
 
+    // Which LLM provider this agent's current model call is routed
+    // through — a glanceable color across the whole floor (see
+    // lib/providerColor.ts); full provider/model/token detail is one click
+    // away in the employee side panel. Hidden until a real call has been
+    // recorded for this agent (no usage row yet == nothing to show).
+    this.providerDot = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTexture(), depthTest: false, transparent: true, opacity: 0 }));
+    this.providerDot.scale.set(0.16, 0.16, 1);
+    this.providerDot.position.set(0, CHARACTER_TARGET_HEIGHT + 0.72, 0);
+    this.root.add(this.providerDot);
+
     this.setStatus('idle');
   }
 
@@ -73,6 +85,13 @@ export class CharacterEntity {
     dot.color.set(STATUS_COLOR[status]);
     this.pulseT = 0;
     this.statusDot.scale.set(0.22, 0.22, 1);
+  }
+
+  /** Updates the small provider-color badge above the character's head. `undefined` (no usage recorded yet for this agent) keeps it hidden rather than showing a misleading default color. */
+  setProvider(provider: string | undefined): void {
+    const material = this.providerDot.material as THREE.SpriteMaterial;
+    material.opacity = provider ? 0.95 : 0;
+    if (provider) material.color.set(providerColorHex(provider));
   }
 
   /** Sets the direction the character should face, in radians (atan2(dx, dz) convention — see OfficeScene3D.directionYaw). Smoothly turns toward it each tick rather than snapping. */

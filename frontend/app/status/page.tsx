@@ -1,6 +1,7 @@
 'use client';
 
 import { useHiveSocket } from '@/hooks/useHiveSocket';
+import { useLlmUsage } from '@/hooks/useLlmUsage';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { HudBar } from '@/components/office/HudBar';
 import { AgentStatusGrid } from '@/components/status/AgentStatusGrid';
@@ -10,6 +11,7 @@ const SESSION_ID = 'OFFICE-001';
 export default function StatusPage() {
   const { ready } = useAuthGuard();
   const { connected, agents, tasks, escalations } = useHiveSocket();
+  const usage = useLlmUsage();
   const workingCount = tasks.filter((t) => t.status === 'working').length;
 
   if (!ready) return null;
@@ -23,7 +25,7 @@ export default function StatusPage() {
           <h1 className="font-mono text-sm uppercase tracking-wide text-[#E6EDF3]">Job suggestions &amp; current status</h1>
           <p className="font-mono text-[11px] text-[#6B7686]">{workingCount} of {agents.length} agents working right now</p>
         </div>
-        <AgentStatusGrid agents={agents} tasks={tasks} escalations={escalations} />
+        <AgentStatusGrid agents={agents} tasks={tasks} escalations={escalations} usage={usage} />
       </div>
     </main>
   );

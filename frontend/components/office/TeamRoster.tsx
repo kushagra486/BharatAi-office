@@ -31,6 +31,18 @@ function TokenBadge({ tokens }: { tokens: number }) {
   );
 }
 
+/** Short "provider/model" tag — the model name alone is often long, so this truncates hard and relies on the title tooltip for the full slug. */
+function ModelTag({ provider, model }: { provider: string; model: string }) {
+  return (
+    <span
+      className="max-w-[110px] shrink truncate font-mono text-[9px] lowercase tracking-tight text-[#6B7686]"
+      title={`${provider} · ${model}`}
+    >
+      {provider}/{model}
+    </span>
+  );
+}
+
 export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgent }: TeamRosterProps) {
   const tasksByAgent = tasksByAgentMap(tasks);
   const withStatus = agents.map((agent) => ({
@@ -95,6 +107,11 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
                 <span className="truncate text-[11px] text-[#8B96A5]">{task ? task.title : agent.role}</span>
                 <TokenBadge tokens={usage[agent.id]?.approxTokens ?? 0} />
               </span>
+              {usage[agent.id] && (
+                <span className="mt-0.5 flex items-baseline justify-end">
+                  <ModelTag provider={usage[agent.id].provider} model={usage[agent.id].model} />
+                </span>
+              )}
             </span>
           </button>
         ))}
