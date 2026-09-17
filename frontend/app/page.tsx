@@ -56,7 +56,8 @@ export default function Home() {
       <BriefStrip brief={brief} onSubmitBrief={submitBrief} />
 
       <div className="flex flex-none flex-col overflow-hidden lg:flex-1">
-        <div className="flex flex-none overflow-hidden lg:flex-1">
+        {/* Stacked on mobile (floor on top, roster below, both full-width) — side by side only from `lg` up, matching TeamRoster's own responsive width/border. Below `lg` the roster isn't hidden anymore (it used to be), so every agent's status/job-suggestion/tokens/model is reachable on a phone without switching pages. */}
+        <div className="flex flex-col overflow-hidden lg:flex-1 lg:flex-row">
           <div className="flex flex-1 flex-col p-4">
             <OfficeFloor3D agents={agents} tasks={tasks} messages={messages} usage={usage} onSelectAgent={setSelectedAgentId} />
           </div>

@@ -57,10 +57,40 @@ function LogoutButton() {
     <button
       type="button"
       onClick={() => logout().finally(() => (window.location.href = '/login'))}
-      className="rounded border border-line px-2 py-1 uppercase tracking-wide text-[#6B7686] transition-all duration-200 hover:border-magenta hover:text-magenta active:scale-95"
+      className="rounded border border-line px-2.5 py-1.5 uppercase tracking-wide text-[#6B7686] transition-all duration-200 hover:border-magenta hover:text-magenta active:scale-95 sm:px-2 sm:py-1"
     >
       Logout
     </button>
+  );
+}
+
+/**
+ * Mobile-only page switcher — SiteNav's own links are `hidden` below `sm`
+ * (there isn't room for brand + clock + 3 nav links + status + action
+ * buttons on one ~375px-wide row), so this is a second row in the same
+ * sticky header instead: page switching stays reachable from the top bar
+ * on every page, at a real touch-target height, rather than disappearing
+ * on phones or moving into a hamburger/overlay.
+ */
+function MobileNav() {
+  const pathname = usePathname();
+  return (
+    <nav className="flex items-stretch border-t border-line/60 sm:hidden">
+      {NAV_LINKS.map((link) => {
+        const active = pathname === link.href;
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={`flex-1 py-2.5 text-center font-mono text-[11px] uppercase tracking-wide transition-colors ${
+              active ? 'bg-line/60 text-[#E6EDF3]' : 'text-[#6B7686] active:bg-line/30'
+            }`}
+          >
+            {link.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -68,7 +98,7 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
   const now = useClock();
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-void/90 px-4 py-2 backdrop-blur relative">
+    <header className="sticky top-0 z-30 flex flex-col border-b border-line bg-void/90 backdrop-blur relative">
       {/* Modern-UI accent: a slow gradient sweep along the top edge, purely decorative. */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-px animate-shimmer bg-[length:200%_100%]"
@@ -76,6 +106,7 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
           backgroundImage: 'linear-gradient(90deg, transparent, #2FE6D2, #8B7CF6, #FFB454, transparent)',
         }}
       />
+      <div className="flex items-center justify-between px-4 py-2">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           {/* Restrained Bharat accent (PRD 7.1): saffron/india-green on brand chrome only. */}
@@ -115,7 +146,7 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
           <button
             type="button"
             onClick={onOpenRecall}
-            className="rounded border border-line px-2 py-1 uppercase tracking-wide text-cyan transition-all duration-200 hover:scale-105 hover:border-cyan hover:shadow-[0_0_10px_-2px_#2FE6D2] active:scale-95"
+            className="rounded border border-line px-2.5 py-1.5 uppercase tracking-wide text-cyan transition-all duration-200 hover:scale-105 hover:border-cyan hover:shadow-[0_0_10px_-2px_#2FE6D2] active:scale-95 sm:px-2 sm:py-1"
           >
             ⌕ Recall
           </button>
@@ -124,7 +155,7 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
           <button
             type="button"
             onClick={onOpenApprovals}
-            className="relative rounded border border-line px-2 py-1 uppercase tracking-wide text-amber transition-all duration-200 hover:scale-105 hover:border-amber hover:shadow-[0_0_10px_-2px_#FFB454] active:scale-95"
+            className="relative rounded border border-line px-2.5 py-1.5 uppercase tracking-wide text-amber transition-all duration-200 hover:scale-105 hover:border-amber hover:shadow-[0_0_10px_-2px_#FFB454] active:scale-95 sm:px-2 sm:py-1"
           >
             ⚑ Approvals
             {!!pendingApprovals && pendingApprovals > 0 && (
@@ -139,6 +170,8 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
         )}
         <LogoutButton />
       </div>
+      </div>
+      <MobileNav />
     </header>
   );
 }

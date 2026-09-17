@@ -1,5 +1,6 @@
 import type { Agent, LlmUsageByAgent, Task } from '@bharat-ai-office/shared';
 import { agentStatus, currentTaskFor, tasksByAgentMap } from '@/lib/agentStatus';
+import { jobDescriptionFor } from '@/lib/agentWork';
 import { formatTokenCount } from '@/lib/format';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { useTokenHistory } from '@/hooks/useTokenHistory';
@@ -62,7 +63,7 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
   const tokenHistory = useTokenHistory(totalTokens);
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-l border-line bg-panel lg:flex">
+    <aside className="flex w-full shrink-0 flex-col border-t border-line bg-panel lg:w-64 lg:border-l lg:border-t-0">
       <div className="border-b border-line px-3 py-2.5">
         <div className="flex items-center justify-between">
           <span className="font-mono text-[10px] uppercase tracking-wider text-[#6B7686]">Team ({agents.length})</span>
@@ -84,7 +85,8 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
           </>
         )}
       </div>
-      <div className="flex-1 overflow-y-auto">
+      {/* No forced scroll region below `lg` — on mobile this panel sits in the page's normal flow below the office floor, and a nested scrollbar fighting the page scroll is worse there. The fixed-height sidebar + its own scrollbar is desktop-only. */}
+      <div className="lg:flex-1 lg:overflow-y-auto">
         {withStatus.map(({ agent, status, task }, index) => (
           <button
             key={agent.id}
@@ -107,6 +109,11 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
                 <span className="truncate text-[11px] text-[#8B96A5]">{task ? task.title : agent.role}</span>
                 <TokenBadge tokens={usage[agent.id]?.approxTokens ?? 0} />
               </span>
+              {!task && agent.id !== 'nova' && (
+                <span className="mt-0.5 block truncate text-[10px] italic text-[#6B7686]" title={jobDescriptionFor(agent.id)}>
+                  Suggestion: {jobDescriptionFor(agent.id)}
+                </span>
+              )}
               {usage[agent.id] && (
                 <span className="mt-0.5 flex items-baseline justify-end">
                   <ModelTag provider={usage[agent.id].provider} model={usage[agent.id].model} />
