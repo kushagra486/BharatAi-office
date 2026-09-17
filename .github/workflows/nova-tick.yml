@@ -16,6 +16,13 @@ jobs:
     steps:
       - name: Call nova-tick
         run: |
+          # APP_URL/CRON_SECRET aren't set until the Vercel project exists and
+          # its secrets are added to this repo — skip cleanly instead of
+          # failing the check on every run until then.
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL and/or CRON_SECRET repo secrets aren't set yet — skipping this tick."
+            exit 0
+          fi
           status=$(curl -s -o /tmp/body -w "%{http_code}" \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_URL/api/cron/nova-tick")
