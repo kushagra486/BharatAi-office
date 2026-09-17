@@ -3,7 +3,7 @@
 # AgentRunner does real file edits + git commits, which need a real
 # writable filesystem and a git binary, not a Netlify Function. Everything
 # else (the API, Nova's periodic reasoning) lives on Netlify instead.
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -15,10 +15,16 @@ COPY shared shared
 COPY daemon daemon
 RUN npm run build --workspace shared && npm run build --workspace daemon
 
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Node 22+ specifically: @supabase/supabase-js's realtime client checks for
+# the native global WebSocket even to construct the client (this worker
+# never subscribes to Realtime, but createClient() still runs that check
+# unconditionally) — Node 20 doesn't have it and every db() call throws
+# "Node.js detected but native WebSocket not found."
+#
 # gitModule.ts shells out to the real `git` binary (single-committer
 # pattern — see its own comment) to commit each employee's work.
 RUN apt-get update \
