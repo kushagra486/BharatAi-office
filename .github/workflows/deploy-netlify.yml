@@ -32,8 +32,15 @@ jobs:
       # Netlify site itself (Supabase/LLM keys etc.), so nothing sensitive
       # needs to live in this repo or in GitHub secrets beyond the two
       # deploy-auth values below.
+      #
+      # --filter is required: this is an npm workspaces monorepo (shared/
+      # daemon/frontend), and newer netlify-cli versions refuse to guess
+      # which workspace is "the site" — without it, the command drops into
+      # an interactive "Select the project" prompt that just hangs/fails
+      # in CI (confirmed locally: reproduced the exact prompt, and this
+      # flag is what it itself offers as the non-interactive equivalent).
       - name: Deploy to Netlify
-        run: npx netlify-cli deploy --build --prod --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN"
+        run: npx netlify-cli deploy --build --prod --filter @bharat-ai-office/frontend --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN"
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
