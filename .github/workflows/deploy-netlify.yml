@@ -1,0 +1,39 @@
+name: Deploy to Netlify
+
+# Triggers on every push to the repo's active branch, plus a manual
+# "Run workflow" button (workflow_dispatch) for redeploying without a new
+# commit — e.g. after changing env vars on the Netlify site itself.
+on:
+  push:
+    branches:
+      - claude/bharat-ai-office-prd-nqmqal
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Installs every workspace (shared/daemon/frontend) so the symlinked
+      # @bharat-ai-office/shared dependency resolves correctly.
+      - name: Install dependencies
+        run: npm ci
+
+      # `--build` runs the build defined in netlify.toml (base=frontend,
+      # builds the shared workspace first, then `next build`) inside this
+      # runner rather than Netlify's own build service — reads all site
+      # config, including the environment variables already set on the
+      # Netlify site itself (Supabase/LLM keys etc.), so nothing sensitive
+      # needs to live in this repo or in GitHub secrets beyond the two
+      # deploy-auth values below.
+      - name: Deploy to Netlify
+        run: npx netlify-cli deploy --build --prod --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
