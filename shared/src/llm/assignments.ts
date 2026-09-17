@@ -18,9 +18,18 @@ export interface Assignment {
 // providers add/retire models — verify current availability in each
 // provider's model catalog before relying on this in production; this file
 // is the one place to update if a slug goes stale.
+//
+// The Groq slugs below (openai/gpt-oss-120b, openai/gpt-oss-20b) were
+// re-verified live against Groq's /v1/models + a real chat-completion call
+// (JSON mode and tool-calling both confirmed working) after the original
+// llama-3.3-70b-versatile / llama-3.1-8b-instant / gemma2-9b-it slugs were
+// found to have been retired from Groq's catalog — every one of them 404'd
+// with "model_not_found". The NVIDIA/OpenRouter slugs have NOT been
+// re-verified (no key to test against yet) — check those the same way
+// before relying on them.
 export const ASSIGNMENTS: Record<string, Assignment> = {
   nova: {
-    primary: { provider: 'groq', model: 'llama-3.3-70b-versatile' },
+    primary: { provider: 'groq', model: 'openai/gpt-oss-120b' },
     fallbacks: [
       { provider: 'nvidia', model: 'meta/llama-3.1-70b-instruct' },
       { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
@@ -29,14 +38,14 @@ export const ASSIGNMENTS: Record<string, Assignment> = {
   kael: {
     primary: { provider: 'nvidia', model: 'meta/llama-3.3-70b-instruct' },
     fallbacks: [
-      { provider: 'groq', model: 'llama-3.3-70b-versatile' },
+      { provider: 'groq', model: 'openai/gpt-oss-120b' },
       { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
     ],
   },
   priya: {
     primary: { provider: 'nvidia', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
     fallbacks: [
-      { provider: 'groq', model: 'llama-3.1-8b-instant' },
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
       { provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
     ],
   },
@@ -44,32 +53,32 @@ export const ASSIGNMENTS: Record<string, Assignment> = {
     primary: { provider: 'nvidia', model: 'mistralai/mixtral-8x22b-instruct-v0.1' },
     fallbacks: [
       { provider: 'openrouter', model: 'mistralai/mistral-7b-instruct:free' },
-      { provider: 'groq', model: 'gemma2-9b-it' },
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
   simran: {
     primary: { provider: 'nvidia', model: 'qwen/qwen2.5-72b-instruct' },
     fallbacks: [
       { provider: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
-      { provider: 'groq', model: 'llama-3.1-8b-instant' },
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
   arjun: {
     primary: { provider: 'nvidia', model: 'google/gemma-2-27b-it' },
     fallbacks: [
-      { provider: 'groq', model: 'gemma2-9b-it' },
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
       { provider: 'openrouter', model: 'google/gemini-2.0-flash-exp:free' },
     ],
   },
   meera: {
-    primary: { provider: 'groq', model: 'llama-3.1-8b-instant' },
+    primary: { provider: 'groq', model: 'openai/gpt-oss-20b' },
     fallbacks: [
       { provider: 'nvidia', model: 'meta/llama-3.1-8b-instruct' },
       { provider: 'openrouter', model: 'mistralai/mistral-7b-instruct:free' },
     ],
   },
   raghav: {
-    primary: { provider: 'groq', model: 'gemma2-9b-it' },
+    primary: { provider: 'groq', model: 'openai/gpt-oss-20b' },
     fallbacks: [
       { provider: 'nvidia', model: 'meta/llama-3.3-70b-instruct' },
       { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
@@ -79,21 +88,21 @@ export const ASSIGNMENTS: Record<string, Assignment> = {
     primary: { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
     fallbacks: [
       { provider: 'nvidia', model: 'nvidia/llama-3.1-nemotron-70b-instruct' },
-      { provider: 'groq', model: 'llama-3.1-8b-instant' },
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
   farhan: {
     primary: { provider: 'openrouter', model: 'google/gemini-2.0-flash-exp:free' },
     fallbacks: [
       { provider: 'nvidia', model: 'google/gemma-2-27b-it' },
-      { provider: 'groq', model: 'gemma2-9b-it' },
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
   isha: {
     primary: { provider: 'openrouter', model: 'mistralai/mistral-7b-instruct:free' },
     fallbacks: [
       { provider: 'nvidia', model: 'mistralai/mixtral-8x22b-instruct-v0.1' },
-      { provider: 'groq', model: 'llama-3.1-8b-instant' },
+      { provider: 'groq', model: 'openai/gpt-oss-20b' },
     ],
   },
 };
