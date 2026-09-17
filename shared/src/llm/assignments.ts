@@ -36,9 +36,16 @@ export interface Assignment {
 //   moonshotai/kimi-k3 consistently times out (30-40s, no response) and
 //   nvidia/nemotron-3.5-lightning-30b-a3b returns HTTP 200 but garbled
 //   nonsense content — both deliberately left out, not just unverified.
-//   Every other NIM slug either 404'd ("Function ... Not found for
-//   account" — not yet granted) or 410'd as retired. Re-verify with a
-//   real curl call before adding any new NIM model here.
+//   mistralai/mistral-nemotron is also granted and gives clean JSON-mode
+//   output, but silently fails tool-calling: asked to call a
+//   list_directory tool, it returned prose describing invented files
+//   instead of a real tool_calls entry (empty tool_calls array). Every
+//   employee seat depends on real tool calls for file/shell work, so this
+//   is left out too — an agent on this model would report fabricated work
+//   as done. Every other NIM slug either 404'd ("Function ... Not found
+//   for account" — not yet granted) or 410'd as retired. Re-verify with a
+//   real curl call (both JSON mode AND tool-calling) before adding any new
+//   NIM model here.
 export const ASSIGNMENTS: Record<string, Assignment> = {
   nova: {
     primary: { provider: 'groq', model: 'openai/gpt-oss-120b' },
