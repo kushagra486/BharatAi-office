@@ -2,7 +2,7 @@ import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } f
 import type { LlmUsageByAgent, LlmUsageStats } from '../llm-types';
 import { assignmentFor, type ModelRef } from './assignments';
 import { getClient, isProviderConfigured } from './providers';
-import { acquireSlot, withRetry } from './rateLimiter';
+import { acquireSlot, reconcileTokens, withRetry } from './rateLimiter';
 import { db } from '../supabaseHive';
 
 export interface ChatCompleteParams {
@@ -27,18 +27,45 @@ async function recordUsage(agentId: string, ref: ModelRef, completion: ChatCompl
   if (error) throw new Error(error.message);
 }
 
+// A real tokenizer isn't worth the dependency here — the rate limiter only
+// needs a conservative pre-call estimate to decide whether a request would
+// blow a provider's token-per-minute budget, and reconcileTokens() (below)
+// corrects it against the real completion.usage.total_tokens right after.
+// ~4 chars/token is the standard rough-English heuristic; COMPLETION_ALLOWANCE
+// covers the reply itself, which isn't knowable before the call returns.
+const CHARS_PER_TOKEN = 4;
+const COMPLETION_ALLOWANCE_TOKENS = 500;
+
+function estimateTokens(params: ChatCompleteParams): number {
+  const promptChars = params.messages.reduce((sum, m) => sum + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length), 0);
+  const toolsChars = params.tools ? JSON.stringify(params.tools).length : 0;
+  return Math.ceil((promptChars + toolsChars) / CHARS_PER_TOKEN) + COMPLETION_ALLOWANCE_TOKENS;
+}
+
 async function callModel(ref: ModelRef, params: ChatCompleteParams): Promise<ChatCompletion> {
-  await acquireSlot(ref.provider, ref.model);
+  const estimatedTokens = estimateTokens(params);
+  await acquireSlot(ref.provider, ref.model, estimatedTokens);
   const client = getClient(ref.provider);
-  return withRetry(() =>
-    client.chat.completions.create({
-      model: ref.model,
-      messages: params.messages,
-      tools: params.tools,
-      temperature: params.temperature ?? 0.2,
-      ...(params.responseFormatJson ? { response_format: { type: 'json_object' as const } } : {}),
-    })
-  );
+  try {
+    const completion = await withRetry(() =>
+      client.chat.completions.create({
+        model: ref.model,
+        messages: params.messages,
+        tools: params.tools,
+        temperature: params.temperature ?? 0.2,
+        ...(params.responseFormatJson ? { response_format: { type: 'json_object' as const } } : {}),
+      })
+    );
+    await reconcileTokens(ref.provider, estimatedTokens, completion.usage?.total_tokens ?? estimatedTokens);
+    return completion;
+  } catch (err) {
+    // The call never happened (or never finished), so free the reservation
+    // instead of leaving it stuck against this minute's budget — otherwise
+    // a string of failures would starve the *next* successful call's
+    // headroom for no reason.
+    await reconcileTokens(ref.provider, estimatedTokens, 0);
+    throw err;
+  }
 }
 
 /**

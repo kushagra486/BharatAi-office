@@ -7,6 +7,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 - Cancel/reset button for a stuck or unwanted active project
 - Token usage breakdown by provider/model in the UI (not just a per-agent total)
+- Tokens-per-minute (TPM) rate limiting, not just requests-per-minute/day —
+  Groq's real per-model TPM budget (8,000) is far tighter than its RPM limit
+  and could 429 well before request-count limits ever would. Pre-call token
+  estimate + post-call reconciliation against real usage, checked atomically
+  alongside the existing RPM/RPD budgets in one Postgres function
+  (`acquire_rate_limit_full`) so a partial pass/fail can't double-spend budget
+  on retry
 
 ## v1.1.0 — 2026-09-22
 
