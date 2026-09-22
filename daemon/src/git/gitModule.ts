@@ -73,3 +73,18 @@ export async function repoStatus(): Promise<string> {
     return stdout;
   });
 }
+
+/**
+ * Wipes every agent's workdir + the local git repo and starts fresh — used
+ * when dispatch.ts notices a new project has started (the `brief` row's
+ * created_at changed) so the previous project's files don't leak into it.
+ * Enqueued like every other git op here so it can't race a commit that's
+ * still in flight for the project that's being cleared out.
+ */
+export async function resetWorkdir(): Promise<void> {
+  return enqueue(async () => {
+    if (fs.existsSync(env.PROJECT_WORKDIR)) {
+      fs.rmSync(env.PROJECT_WORKDIR, { recursive: true, force: true });
+    }
+  });
+}

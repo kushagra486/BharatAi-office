@@ -12,12 +12,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   in a new dashboard panel with per-file download via a short-lived signed
   URL. This was the top item on the roadmap — actual deliverables were
   previously only reachable by SSHing into the worker's filesystem.
-  Known gap, not fixed here: abandoning a project (the button above)
-  doesn't reset the worker's local git working directory or wipe files a
-  new project's agents never touch — only started mattering once "Abandon"
-  actually existed to abandon *into* a second project. Flagging as a
-  follow-up rather than bundling a worker-restart-signal mechanism into the
-  same change.
+- Fixed the workdir-reset gap noted above: the worker now detects a new
+  project (the `brief` row's `created_at` changes — it's a singleton row
+  deleted and re-created fresh per project) on its next dispatch poll and
+  wipes its local git workdir before starting on it, so a second project's
+  agents never inherit the first one's files. Deferred if an agent is still
+  actively running (narrow race guard, shouldn't normally trigger). No new
+  channel to the worker was needed — it already polls the `tasks` table
+  every few seconds, so this just piggybacks on that same poll.
 - Tokens-per-minute (TPM) rate limiting, not just requests-per-minute/day —
   Groq's real per-model TPM budget (8,000) is far tighter than its RPM limit
   and could 429 well before request-count limits ever would. Pre-call token

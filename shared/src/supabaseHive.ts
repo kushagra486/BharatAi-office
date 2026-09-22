@@ -224,10 +224,11 @@ interface BriefRow {
   brief: string;
   eta_minutes: number | null;
   status: string;
+  created_at: string;
 }
 
 function rowToBrief(row: BriefRow): BriefRecord {
-  return { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status };
+  return { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status, createdAt: row.created_at };
 }
 
 export async function setBrief(input: { brief: string; etaMinutes?: number | null; status?: string }): Promise<BriefRecord> {
@@ -238,14 +239,14 @@ export async function setBrief(input: { brief: string; etaMinutes?: number | nul
         { id: 1, brief: input.brief, eta_minutes: input.etaMinutes ?? null, status: input.status ?? 'planning', updated_at: new Date().toISOString() },
         { onConflict: 'id' }
       )
-      .select('brief, eta_minutes, status')
+      .select('brief, eta_minutes, status, created_at')
       .single()
   );
   return rowToBrief(row);
 }
 
 export async function getBrief(): Promise<BriefRecord | undefined> {
-  const { data, error } = await db().from('brief').select('brief, eta_minutes, status').eq('id', 1).maybeSingle();
+  const { data, error } = await db().from('brief').select('brief, eta_minutes, status, created_at').eq('id', 1).maybeSingle();
   if (error) throw new Error(error.message);
   return data ? rowToBrief(data as BriefRow) : undefined;
 }

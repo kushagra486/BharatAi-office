@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Agent, Escalation, HiveMessage, Task } from '@bharat-ai-office/shared';
+import type { Agent, BriefRecord, Escalation, HiveMessage, Task } from '@bharat-ai-office/shared';
 import { getAuthStatus, getBrief, listAgents, listEscalations, listMessages, listTasks } from '@/lib/daemonApi';
 import { getToken } from '@/lib/authToken';
 import { getSupabaseClient } from '@/lib/supabaseClient';
@@ -12,7 +12,7 @@ export interface HiveSocketState {
   tasks: Task[];
   messages: HiveMessage[];
   escalations: Escalation[];
-  brief: { brief: string; etaMinutes: number | null; status: string } | null;
+  brief: BriefRecord | null;
   // Per-agent accumulated terminal output, capped, for the employee side panel.
   agentOutputByAgent: Record<string, string>;
 }
@@ -95,8 +95,11 @@ export function useHiveSocket(): HiveSocketState {
         }));
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'brief' }, (payload) => {
-        const row = payload.new as { brief: string; eta_minutes: number | null; status: string };
-        setState((prev) => ({ ...prev, brief: { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status } }));
+        const row = payload.new as { brief: string; eta_minutes: number | null; status: string; created_at: string };
+        setState((prev) => ({
+          ...prev,
+          brief: { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status, createdAt: row.created_at },
+        }));
       })
       .on('broadcast', { event: 'output' }, ({ payload }) => {
         const { agentId, chunk } = payload as { agentId: string; taskId: string; chunk: string };

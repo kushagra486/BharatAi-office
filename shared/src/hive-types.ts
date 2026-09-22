@@ -68,6 +68,11 @@ export interface BriefRecord {
   brief: string;
   etaMinutes: number | null;
   status: string;
+  // Identifies which project this is — the `brief` row is a singleton
+  // (id=1) that gets deleted and re-created fresh on each new project
+  // (see supabaseHive.clearProject/setBrief), so createdAt changing is how
+  // the worker notices a new project started and resets its local workdir.
+  createdAt: string;
 }
 
 export interface HiveSnapshot {
