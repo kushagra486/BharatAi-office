@@ -120,6 +120,25 @@ class AgentRunner {
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (state.cancelled) return;
+
+      // Real cross-process cancel signal: kill() only covers an in-process
+      // caller (nothing calls it yet), but the frontend's "Abandon project"
+      // button cancels by deleting the task row directly from Postgres —
+      // the only channel this worker and the frontend's serverless routes
+      // share. Checked once per turn (not mid-tool-call) so a run in
+      // progress finishes its current tool call cleanly instead of leaving
+      // a half-applied edit.
+      const liveTask = await hive.getTask(taskId);
+      if (!liveTask || liveTask.status !== 'working') {
+        this.emit(
+          agentId,
+          taskId,
+          `[${agent.name}] stopping — task ${liveTask ? `status changed to "${liveTask.status}"` : 'no longer exists'} externally`
+        );
+        this.running.delete(agentId);
+        return;
+      }
+
       if (Date.now() - startedAt > WALL_CLOCK_LIMIT_MS) {
         outcome = { kind: 'failed', reason: 'exceeded the 10-minute time limit without finishing' };
         break;
@@ -195,22 +214,35 @@ class AgentRunner {
       } catch (err) {
         console.error(`[agent-runner] commit failed for ${agentId}`, err);
       }
-      await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'report', body: outcome.summary });
-      await hive.updateTaskStatus(taskId, 'done');
+      // The task row can vanish between the last per-turn liveness check and
+      // here (e.g. "Abandon project" deleting it mid-final-turn) — a failed
+      // update here must not become an unhandled rejection, which would
+      // crash the whole worker process and take every other agent's
+      // in-flight run down with it.
+      try {
+        await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'report', body: outcome.summary });
+        await hive.updateTaskStatus(taskId, 'done');
+      } catch (err) {
+        console.error(`[agent-runner] failed to record completion for ${agentId}/${taskId} (task may have been deleted)`, err);
+      }
       agentEvents.emit('exit', { agentId, taskId, exitCode: 0 } satisfies AgentExitEvent);
       void publishAgentEvent('exit', { agentId, taskId, exitCode: 0 });
       return;
     }
 
-    await hive.updateTaskStatus(taskId, 'blocked');
-    if (outcome.kind === 'escalate') {
-      // Sent to Nova for policy triage — an employee flagging something
-      // doesn't automatically belong on the human's Approvals Dock.
-      await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'escalation', body: outcome.reason });
-    } else {
-      // A worker-detected operational failure, not a policy judgment call —
-      // goes straight to the human.
-      await hive.raiseEscalation({ agentId, description: `Task "${taskId}" ${outcome.reason}. Needs review.` });
+    try {
+      await hive.updateTaskStatus(taskId, 'blocked');
+      if (outcome.kind === 'escalate') {
+        // Sent to Nova for policy triage — an employee flagging something
+        // doesn't automatically belong on the human's Approvals Dock.
+        await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'escalation', body: outcome.reason });
+      } else {
+        // A worker-detected operational failure, not a policy judgment call —
+        // goes straight to the human.
+        await hive.raiseEscalation({ agentId, description: `Task "${taskId}" ${outcome.reason}. Needs review.` });
+      }
+    } catch (err) {
+      console.error(`[agent-runner] failed to record ${outcome.kind} for ${agentId}/${taskId} (task may have been deleted)`, err);
     }
     agentEvents.emit('exit', { agentId, taskId, exitCode: 1 } satisfies AgentExitEvent);
     void publishAgentEvent('exit', { agentId, taskId, exitCode: 1 });

@@ -14,6 +14,20 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
   alongside the existing RPM/RPD budgets in one Postgres function
   (`acquire_rate_limit_full`) so a partial pass/fail can't double-spend budget
   on retry
+- Rebalanced agent→LLM model assignments: NVIDIA had 5 of 11 primary slots
+  (only 3 verified models), including two agents with a completely identical
+  primary+fallback chain. Redistributed to 3/4/4 across Groq/NVIDIA/OpenRouter
+  and made sure every pair still forced to share a primary has a fully
+  disjoint fallback chain, so a rate limit on one agent doesn't also strand
+  its collision partner
+- Fixed a real crash risk: the worker had no way to notice a task's row was
+  deleted out from under it (e.g. by the "Abandon project" button while that
+  task was actively running) — it would try to update a row that no longer
+  existed and throw an unhandled rejection, which could take the whole
+  worker process down with every other agent's in-flight work. AgentRunner
+  now checks the task is still live once per turn and stops cleanly if not,
+  and the final status/message writes are no longer allowed to crash the
+  process if that race still slips through
 
 ## v1.1.0 — 2026-09-22
 
