@@ -47,15 +47,23 @@ export async function ensureRepo(): Promise<void> {
   });
 }
 
-export async function commitAgentWork(agentId: string, message: string): Promise<{ committed: boolean }> {
+export async function commitAgentWork(agentId: string, message: string): Promise<{ committed: boolean; changedFiles: string[] }> {
   return enqueue(async () => {
     await run(['add', agentId]);
     const { stdout } = await run(['status', '--porcelain', '--', agentId]);
     if (!stdout.trim()) {
-      return { committed: false };
+      return { committed: false, changedFiles: [] };
     }
     await run(['commit', '-m', message]);
-    return { committed: true };
+    // Repo-root-relative paths (so already "{agentId}/relative/path"), used
+    // by AgentRunner to mirror just what changed into Supabase Storage
+    // instead of re-uploading the agent's whole workdir on every commit.
+    const { stdout: diffOutput } = await run(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD']);
+    const changedFiles = diffOutput
+      .split('\n')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    return { committed: true, changedFiles };
   });
 }
 

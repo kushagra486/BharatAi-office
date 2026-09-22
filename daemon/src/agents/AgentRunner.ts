@@ -23,6 +23,33 @@ import { executeToolCall, TOOL_SCHEMAS } from './tools';
 const MAX_TURNS = 25;
 const WALL_CLOCK_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
 
+// Just enough to render sensibly in a browser (preview/download) — not a
+// general-purpose mime database. Anything else falls back to
+// application/octet-stream, which still downloads fine either way.
+const CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.ts': 'text/plain',
+  '.tsx': 'text/plain',
+  '.jsx': 'text/plain',
+  '.json': 'application/json',
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+};
+
+function guessContentType(filePath: string): string {
+  return CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
+
 export interface AgentOutputEvent {
   agentId: string;
   taskId: string;
@@ -207,10 +234,27 @@ class AgentRunner {
     await this.finish(agentId, taskId, outcome ?? { kind: 'failed', reason: `did not finish within ${MAX_TURNS} turns` });
   }
 
+  private async uploadChangedFiles(changedFiles: string[]): Promise<void> {
+    // Mirrors just what this commit touched into Supabase Storage for the
+    // frontend's Files tab. Uploads are independent — one bad file (unlikely,
+    // but binary/permissions edge cases exist) shouldn't drop the rest.
+    for (const relPath of changedFiles) {
+      try {
+        const absPath = path.join(env.PROJECT_WORKDIR, relPath);
+        if (!fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) continue; // deleted or a directory entry
+        const content = fs.readFileSync(absPath);
+        await hive.uploadProjectFile(relPath, content, guessContentType(relPath));
+      } catch (err) {
+        console.error(`[agent-runner] failed to upload "${relPath}" to project-files storage`, err);
+      }
+    }
+  }
+
   private async finish(agentId: string, taskId: string, outcome: Outcome): Promise<void> {
     if (outcome.kind === 'done') {
       try {
-        await commitAgentWork(agentId, `${agentId}: ${outcome.summary}`.slice(0, 200));
+        const { changedFiles } = await commitAgentWork(agentId, `${agentId}: ${outcome.summary}`.slice(0, 200));
+        if (changedFiles.length > 0) await this.uploadChangedFiles(changedFiles);
       } catch (err) {
         console.error(`[agent-runner] commit failed for ${agentId}`, err);
       }

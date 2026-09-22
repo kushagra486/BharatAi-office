@@ -7,6 +7,17 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 - Cancel/reset button for a stuck or unwanted active project
 - Token usage breakdown by provider/model in the UI (not just a per-agent total)
+- Files tab: every file an agent commits is now mirrored into Supabase
+  Storage (upload-on-commit, keyed by "{agentId}/relative/path") and shown
+  in a new dashboard panel with per-file download via a short-lived signed
+  URL. This was the top item on the roadmap — actual deliverables were
+  previously only reachable by SSHing into the worker's filesystem.
+  Known gap, not fixed here: abandoning a project (the button above)
+  doesn't reset the worker's local git working directory or wipe files a
+  new project's agents never touch — only started mattering once "Abandon"
+  actually existed to abandon *into* a second project. Flagging as a
+  follow-up rather than bundling a worker-restart-signal mechanism into the
+  same change.
 - Tokens-per-minute (TPM) rate limiting, not just requests-per-minute/day —
   Groq's real per-model TPM budget (8,000) is far tighter than its RPM limit
   and could 429 well before request-count limits ever would. Pre-call token

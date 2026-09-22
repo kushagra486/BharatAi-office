@@ -16,6 +16,15 @@ export interface Agent {
   home_y: number;
 }
 
+// A file an agent has committed to the project's git repo, mirrored into
+// Supabase Storage (bucket "project-files") so the frontend can list and
+// download it without needing direct access to the worker's filesystem.
+export interface ProjectFile {
+  path: string; // "{agentId}/relative/path/in/that/agent's/workdir"
+  size: number;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   agent_id: string;

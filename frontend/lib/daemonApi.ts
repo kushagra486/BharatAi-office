@@ -1,4 +1,4 @@
-import type { Agent, BriefRecord, Escalation, HiveMessage, LlmUsageByAgent, MemoryEntry, Task } from '@bharat-ai-office/shared';
+import type { Agent, BriefRecord, Escalation, HiveMessage, LlmUsageByAgent, MemoryEntry, ProjectFile, Task } from '@bharat-ai-office/shared';
 import { clearToken, getToken } from './authToken';
 
 // Same-origin now — the API used to be a separate daemon process (a
@@ -113,4 +113,14 @@ export async function listEscalations(): Promise<Escalation[]> {
 
 export async function getBrief(): Promise<BriefRecord | null> {
   return request<BriefRecord | null>('/api/brief');
+}
+
+export async function listProjectFiles(): Promise<ProjectFile[]> {
+  return request<ProjectFile[]>('/api/files');
+}
+
+/** A signed URL good for 5 minutes — fetch fresh right before navigating to it, don't cache. */
+export async function getProjectFileDownloadUrl(path: string): Promise<string> {
+  const { url } = await request<{ url: string }>(`/api/files/download?path=${encodeURIComponent(path)}`);
+  return url;
 }

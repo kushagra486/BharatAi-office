@@ -7,6 +7,7 @@ import type {
   HiveMessage,
   MemoryEntry,
   MessageType,
+  ProjectFile,
   Task,
   TaskStatus,
 } from './hive-types';
@@ -265,4 +266,73 @@ export async function clearProject(): Promise<void> {
   if (tasksError) throw new Error(tasksError.message);
   const { error: briefError } = await db().from('brief').delete().eq('id', 1);
   if (briefError) throw new Error(briefError.message);
+  // Best-effort: an abandoned project's downloadable files shouldn't linger
+  // for the next one, but a Storage hiccup here shouldn't block the
+  // composer from reopening — the DB rows above are what actually matters.
+  try {
+    await clearProjectFiles();
+  } catch (err) {
+    console.error('[supabaseHive] failed to clear project-files storage during abandon', err);
+  }
+}
+
+// --- project files (Supabase Storage) ---------------------------------------
+//
+// Mirrors each agent's committed work into Storage so the frontend's Files
+// tab can list/download without touching the worker's filesystem directly
+// (the worker has no HTTP server — see daemon/src/index.ts). Uploaded by
+// AgentRunner right after a successful git commit, keyed by the same
+// "{agentId}/relative/path" the commit touched.
+
+const PROJECT_FILES_BUCKET = 'project-files';
+
+export async function uploadProjectFile(path: string, content: Uint8Array, contentType?: string): Promise<void> {
+  const { error } = await db()
+    .storage.from(PROJECT_FILES_BUCKET)
+    .upload(path, content, { contentType: contentType ?? 'application/octet-stream', upsert: true });
+  if (error) throw new Error(error.message);
+}
+
+// Storage .list() only returns one directory level at a time. Uploaded paths
+// are always exactly "{agentId}/{relativePath}", so one call for the
+// top-level (agent id folders) plus one nested call per folder covers every
+// file — this deliberately doesn't recurse further, since agent workdirs
+// are small single-project deliverables (a handful of files/assets), not
+// deep source trees.
+export async function listProjectFiles(): Promise<ProjectFile[]> {
+  const storage = db().storage.from(PROJECT_FILES_BUCKET);
+  const { data: topLevel, error } = await storage.list('', { limit: 1000 });
+  if (error) throw new Error(error.message);
+
+  const files: ProjectFile[] = [];
+  for (const entry of topLevel ?? []) {
+    if (entry.id !== null) continue; // a stray top-level file, not an agent folder — ignore
+    const { data: nested, error: nestedError } = await storage.list(entry.name, { limit: 1000 });
+    if (nestedError) throw new Error(nestedError.message);
+    for (const file of nested ?? []) {
+      if (file.id === null) continue; // a subfolder one level deeper — not supported, skip
+      files.push({
+        path: `${entry.name}/${file.name}`,
+        size: (file.metadata?.size as number | undefined) ?? 0,
+        updatedAt: file.updated_at ?? file.created_at ?? '',
+      });
+    }
+  }
+  return files;
+}
+
+/** A short-lived signed URL — the bucket is private, so this is the only way to fetch a file's content. */
+export async function getProjectFileDownloadUrl(path: string): Promise<string> {
+  const { data, error } = await db().storage.from(PROJECT_FILES_BUCKET).createSignedUrl(path, 300);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
+}
+
+export async function clearProjectFiles(): Promise<void> {
+  const files = await listProjectFiles();
+  if (files.length === 0) return;
+  const { error } = await db()
+    .storage.from(PROJECT_FILES_BUCKET)
+    .remove(files.map((f) => f.path));
+  if (error) throw new Error(error.message);
 }
