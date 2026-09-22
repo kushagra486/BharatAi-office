@@ -63,6 +63,10 @@ const config: Config = {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
+        'cursor-blink': {
+          '0%, 49%': { opacity: '1' },
+          '50%, 100%': { opacity: '0' },
+        },
       },
       animation: {
         'idle-bob': 'idle-bob 2.4s ease-in-out infinite',
@@ -71,6 +75,7 @@ const config: Config = {
         'pop-in': 'pop-in 360ms cubic-bezier(0.34,1.56,0.64,1) both',
         'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
         shimmer: 'shimmer 3.5s linear infinite',
+        'cursor-blink': 'cursor-blink 1s step-end infinite',
       },
     },
   },

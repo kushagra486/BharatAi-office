@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Agent, BriefRecord, Escalation, HiveEvent, HiveMessage, MemoryEntry, Task } from '@bharat-ai-office/shared';
-
-export const DAEMON_WS_URL = process.env.NEXT_PUBLIC_DAEMON_WS_URL ?? 'ws://localhost:4317/ws';
+import type { Agent, Escalation, HiveMessage, Task } from '@bharat-ai-office/shared';
+import { getAuthStatus, getBrief, listAgents, listEscalations, listMessages, listTasks } from '@/lib/daemonApi';
+import { getToken } from '@/lib/authToken';
+import { getSupabaseClient } from '@/lib/supabaseClient';
 
 export interface HiveSocketState {
   connected: boolean;
@@ -11,14 +12,12 @@ export interface HiveSocketState {
   tasks: Task[];
   messages: HiveMessage[];
   escalations: Escalation[];
-  memories: MemoryEntry[];
-  brief: BriefRecord | null;
+  brief: { brief: string; etaMinutes: number | null; status: string } | null;
   // Per-agent accumulated terminal output, capped, for the employee side panel.
   agentOutputByAgent: Record<string, string>;
 }
 
 const TERMINAL_BUFFER_CAP = 20_000;
-const RECONNECT_DELAY_MS = 2000;
 
 const initialState: HiveSocketState = {
   connected: false,
@@ -26,90 +25,97 @@ const initialState: HiveSocketState = {
   tasks: [],
   messages: [],
   escalations: [],
-  memories: [],
   brief: null,
   agentOutputByAgent: {},
 };
 
-function applyEvent(prev: HiveSocketState, event: HiveEvent): HiveSocketState {
-  switch (event.type) {
-    case 'snapshot':
-      return {
-        ...prev,
-        connected: true,
-        agents: event.payload.agents,
-        tasks: event.payload.tasks,
-        messages: event.payload.messages,
-        escalations: event.payload.escalations,
-        brief: event.payload.brief,
-      };
-    case 'task:update': {
-      const tasks = [...prev.tasks.filter((t) => t.id !== event.payload.id), event.payload];
-      return { ...prev, tasks };
-    }
-    case 'message:new':
-      return { ...prev, messages: [event.payload, ...prev.messages].slice(0, 300) };
-    case 'escalation:new': {
-      const escalations = [event.payload, ...prev.escalations.filter((e) => e.id !== event.payload.id)];
-      return { ...prev, escalations };
-    }
-    case 'escalation:resolved': {
-      const escalations = prev.escalations.map((e) => (e.id === event.payload.id ? event.payload : e));
-      return { ...prev, escalations };
-    }
-    case 'memory:new':
-      return { ...prev, memories: [event.payload, ...prev.memories].slice(0, 300) };
-    case 'brief:update':
-      return { ...prev, brief: event.payload };
-    case 'agent:output': {
-      const key = event.payload.agentId;
-      const existing = prev.agentOutputByAgent[key] ?? '';
-      const next = (existing + event.payload.chunk).slice(-TERMINAL_BUFFER_CAP);
-      return { ...prev, agentOutputByAgent: { ...prev.agentOutputByAgent, [key]: next } };
-    }
-    case 'agent:exit':
-      return prev; // the corresponding task:update already reflects the outcome
-    default:
-      return prev;
-  }
-}
-
-/** Keeps agent/task/message/escalation/memory state in sync with the daemon's WebSocket. */
+/**
+ * Keeps agent/task/message/escalation/brief state in sync with Supabase —
+ * a one-shot fetch of the current state via the Next.js API routes (which
+ * enforce the login gate), then Supabase Realtime for live updates. This
+ * replaces the old raw WebSocket connection to the daemon: there's no
+ * long-lived daemon process to hold that socket open anymore, but Postgres
+ * changes on tasks/messages/escalations/brief are published to Realtime
+ * directly (see the initial_hive_schema migration), so the effect is the
+ * same. The employee side panel's live terminal feed (agent:output/
+ * agent:exit) rides a separate Realtime *broadcast* channel instead of a
+ * table — those chunks are high-frequency and not meant to be queried or
+ * persisted, so a table+postgres_changes would be the wrong tool; the
+ * persistent worker publishes them directly (see worker/src/dispatch.ts).
+ */
 export function useHiveSocket(): HiveSocketState {
   const [state, setState] = useState<HiveSocketState>(initialState);
-  const socketRef = useRef<WebSocket | null>(null);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
-    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    cancelledRef.current = false;
 
-    function connect() {
-      const socket = new WebSocket(DAEMON_WS_URL);
-      socketRef.current = socket;
+    (async () => {
+      // A login is required and this browser has no token yet — don't even
+      // attempt the initial fetch (it would just 401); useAuthGuard handles
+      // the redirect to /login.
+      try {
+        const status = await getAuthStatus();
+        if (status.authRequired && !getToken()) return;
+      } catch {
+        return; // daemon/API unreachable — HUD's connected dot already reflects this
+      }
 
-      socket.onmessage = (raw) => {
-        try {
-          const event = JSON.parse(raw.data as string) as HiveEvent;
-          setState((prev) => applyEvent(prev, event));
-        } catch {
-          // ignore malformed frames
+      try {
+        const [agents, tasks, messages, escalations, brief] = await Promise.all([
+          listAgents(),
+          listTasks(),
+          listMessages(),
+          listEscalations(),
+          getBrief(),
+        ]);
+        if (cancelledRef.current) return;
+        setState((prev) => ({ ...prev, connected: true, agents, tasks, messages, escalations, brief }));
+      } catch (err) {
+        console.error('[useHiveSocket] initial fetch failed', err);
+      }
+    })();
+
+    const supabase = getSupabaseClient();
+    const channel = supabase
+      .channel('hive-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
+        const task = payload.new as Task;
+        setState((prev) => ({ ...prev, tasks: [...prev.tasks.filter((t) => t.id !== task.id), task] }));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        const message = payload.new as HiveMessage;
+        setState((prev) => ({ ...prev, messages: [message, ...prev.messages].slice(0, 300) }));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'escalations' }, (payload) => {
+        const escalation = payload.new as Escalation;
+        setState((prev) => ({
+          ...prev,
+          escalations: [escalation, ...prev.escalations.filter((e) => e.id !== escalation.id)],
+        }));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'brief' }, (payload) => {
+        const row = payload.new as { brief: string; eta_minutes: number | null; status: string };
+        setState((prev) => ({ ...prev, brief: { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status } }));
+      })
+      .on('broadcast', { event: 'output' }, ({ payload }) => {
+        const { agentId, chunk } = payload as { agentId: string; taskId: string; chunk: string };
+        setState((prev) => {
+          const existing = prev.agentOutputByAgent[agentId] ?? '';
+          const next = (existing + chunk).slice(-TERMINAL_BUFFER_CAP);
+          return { ...prev, agentOutputByAgent: { ...prev.agentOutputByAgent, [agentId]: next } };
+        });
+      })
+      .subscribe((subStatus) => {
+        if (subStatus === 'SUBSCRIBED') setState((prev) => ({ ...prev, connected: true }));
+        if (subStatus === 'CHANNEL_ERROR' || subStatus === 'TIMED_OUT' || subStatus === 'CLOSED') {
+          setState((prev) => ({ ...prev, connected: false }));
         }
-      };
-
-      socket.onclose = () => {
-        setState((prev) => ({ ...prev, connected: false }));
-        if (!cancelled) reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
-      };
-
-      socket.onerror = () => socket.close();
-    }
-
-    connect();
+      });
 
     return () => {
-      cancelled = true;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      socketRef.current?.close();
+      cancelledRef.current = true;
+      void supabase.removeChannel(channel);
     };
   }, []);
 

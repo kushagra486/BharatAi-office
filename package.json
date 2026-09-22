@@ -14,7 +14,11 @@
     "dev:frontend": "npm run dev --workspace frontend",
     "build": "npm run build --workspace shared && npm run build --workspace daemon && npm run build --workspace frontend",
     "build:shared": "npm run build --workspace shared",
-    "typecheck": "npm run typecheck --workspace shared && npm run typecheck --workspace daemon && npm run typecheck --workspace frontend"
+    "typecheck": "npm run typecheck --workspace shared && npm run typecheck --workspace daemon && npm run typecheck --workspace frontend",
+    "electron": "electron electron/main.js"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0"
   },
   "engines": {
     "node": ">=20"

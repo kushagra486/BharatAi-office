@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useHiveSocket } from '@/hooks/useHiveSocket';
 import { useLlmUsage } from '@/hooks/useLlmUsage';
+import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { approveEscalation, denyEscalation, submitBrief } from '@/lib/daemonApi';
 import { HudBar } from '@/components/office/HudBar';
 import { BriefStrip } from '@/components/office/BriefStrip';
@@ -13,19 +14,18 @@ import { EmployeeSidePanel } from '@/components/office/EmployeeSidePanel';
 import { TeamRoster } from '@/components/office/TeamRoster';
 import { TeamActivity } from '@/components/office/TeamActivity';
 
-// Pixel-art office floor (see /root/.claude/plans/synchronous-yawning-unicorn.md).
-// Client-only: it owns a PIXI.Application (WebGL/canvas), so it's kept out
-// of the server render even though it doesn't strictly require ssr:false
-// today (see the migration's build notes).
-const OfficeFloorPixel = dynamic(
-  () => import('@/components/office-pixel/OfficeFloorPixel').then((m) => m.OfficeFloorPixel),
-  { ssr: false }
-);
+// Real-time 3D office floor — a Three.js scene with the team's actual 3D
+// character models and CC0 furniture props (see components/office-3d/).
+// Client-only: it owns a WebGLRenderer, so it's kept out of the server render.
+const OfficeFloor3D = dynamic(() => import('@/components/office-3d/OfficeFloor3D').then((m) => m.OfficeFloor3D), {
+  ssr: false,
+});
 
 const SESSION_ID = 'OFFICE-001';
 
 export default function Home() {
-  const { connected, agents, tasks, messages, escalations, memories, brief, agentOutputByAgent } = useHiveSocket();
+  const { ready } = useAuthGuard();
+  const { connected, agents, tasks, messages, escalations, brief, agentOutputByAgent } = useHiveSocket();
   const usage = useLlmUsage();
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [recallOpen, setRecallOpen] = useState(false);
@@ -42,6 +42,8 @@ export default function Home() {
     denyEscalation(id).catch((err) => console.error('failed to deny escalation', id, err));
   }
 
+  if (!ready) return null;
+
   return (
     <main className="flex min-h-screen flex-col bg-void">
       <HudBar
@@ -53,10 +55,11 @@ export default function Home() {
       />
       <BriefStrip brief={brief} onSubmitBrief={submitBrief} />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-none flex-col overflow-hidden lg:flex-1">
+        {/* Stacked on mobile (floor on top, roster below, both full-width) — side by side only from `lg` up, matching TeamRoster's own responsive width/border. Below `lg` the roster isn't hidden anymore (it used to be), so every agent's status/job-suggestion/tokens/model is reachable on a phone without switching pages. */}
+        <div className="flex flex-col overflow-hidden lg:flex-1 lg:flex-row">
           <div className="flex flex-1 flex-col p-4">
-            <OfficeFloorPixel agents={agents} tasks={tasks} messages={messages} onSelectAgent={setSelectedAgentId} />
+            <OfficeFloor3D agents={agents} tasks={tasks} messages={messages} usage={usage} onSelectAgent={setSelectedAgentId} />
           </div>
           <TeamRoster agents={agents} tasks={tasks} usage={usage} selectedAgentId={selectedAgentId} onSelectAgent={setSelectedAgentId} />
         </div>
@@ -67,7 +70,7 @@ export default function Home() {
         <ApprovalsDock escalations={escalations} onApprove={handleApprove} onDeny={handleDeny} />
       </div>
 
-      <MemoryRecallPanel open={recallOpen} onClose={() => setRecallOpen(false)} memories={memories} />
+      <MemoryRecallPanel open={recallOpen} onClose={() => setRecallOpen(false)} />
 
       <EmployeeSidePanel
         agent={selectedAgent}

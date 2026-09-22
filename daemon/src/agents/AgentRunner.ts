@@ -3,11 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import type { Agent, Task } from '@bharat-ai-office/shared';
-import { ROSTER } from '@bharat-ai-office/shared';
+import { llmRouter, supabaseHive as hive } from '@bharat-ai-office/shared/server';
 import { env } from '../env';
 import { commitAgentWork } from '../git/gitModule';
-import * as hive from '../hive/hive';
-import { chatComplete } from '../llm/router';
+import { publishAgentEvent } from '../realtimeBroadcast';
 import { buildRolePrompt } from './rolePrompts';
 import { executeToolCall, TOOL_SCHEMAS } from './tools';
 
@@ -16,6 +15,11 @@ import { executeToolCall, TOOL_SCHEMAS } from './tools';
 // whichever provider+model llm/assignments.ts gives this agent. See the
 // migration plan's "key trade-offs" for why (no more Claude Code permission
 // engine — our own sandboxing in tools.ts does that job now).
+//
+// This is the one piece of the original daemon that stays a real
+// always-on process (PRD §5.1) rather than moving to serverless: it does
+// real file edits in PROJECT_WORKDIR/{agentId}/ and real git commits,
+// neither of which survive a stateless function invocation.
 const MAX_TURNS = 25;
 const WALL_CLOCK_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -39,6 +43,9 @@ interface RunningState {
   cancelled: boolean;
 }
 
+// Kept as a local bus (in addition to the Supabase Realtime broadcast in
+// publishAgentEvent) purely so this module stays independently testable
+// without a live network call for every emitted line.
 export const agentEvents = new EventEmitter();
 
 class AgentRunner {
@@ -52,26 +59,30 @@ class AgentRunner {
     return this.running.has(agentId);
   }
 
-  /** Starts the tool-use loop for `agentId` working `taskId`. Returns immediately; the loop runs async. */
-  startTask(agentId: string, taskId: string): { agentId: string; taskId: string } {
-    if (this.running.has(agentId)) {
-      throw new Error(`agent ${agentId} already has a running task`);
-    }
-    const agent = ROSTER.find((a) => a.id === agentId);
-    if (!agent) throw new Error(`unknown agent: ${agentId}`);
-    const task = hive.getTask(taskId);
-    if (!task) throw new Error(`unknown task: ${taskId}`);
+  activeCount(): number {
+    return this.running.size;
+  }
 
-    const workdir = this.agentWorkdir(agentId);
+  atCapacity(): boolean {
+    return this.running.size >= env.MAX_CONCURRENT_SESSIONS;
+  }
+
+  /** Starts the tool-use loop for `agent` working `task`. Returns immediately; the loop runs async. Caller (dispatch.ts) already has both loaded from its own poll, so no re-fetch here. */
+  startTask(agent: Agent, task: Task): void {
+    if (this.running.has(agent.id)) {
+      throw new Error(`agent ${agent.id} already has a running task`);
+    }
+    if (this.atCapacity()) {
+      throw new Error(`at MAX_CONCURRENT_SESSIONS (${env.MAX_CONCURRENT_SESSIONS}) — task stays idle until a slot frees up`);
+    }
+
+    const workdir = this.agentWorkdir(agent.id);
     fs.mkdirSync(workdir, { recursive: true });
 
-    const state: RunningState = { agentId, taskId, cancelled: false };
-    this.running.set(agentId, state);
+    const state: RunningState = { agentId: agent.id, taskId: task.id, cancelled: false };
+    this.running.set(agent.id, state);
 
-    hive.updateTaskStatus(taskId, 'working');
     void this.runLoop(state, agent, task, workdir);
-
-    return { agentId, taskId };
   }
 
   kill(agentId: string): void {
@@ -83,10 +94,13 @@ class AgentRunner {
   private emit(agentId: string, taskId: string, chunk: string): void {
     const event: AgentOutputEvent = { agentId, taskId, chunk: chunk.endsWith('\n') ? chunk : `${chunk}\n` };
     agentEvents.emit('output', event);
+    void publishAgentEvent('output', event);
   }
 
   private async runLoop(state: RunningState, agent: Agent, task: Task, workdir: string): Promise<void> {
     const { agentId, taskId } = state;
+    await hive.updateTaskStatus(taskId, 'working');
+
     const startedAt = Date.now();
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: buildRolePrompt(agent, workdir) },
@@ -96,6 +110,13 @@ class AgentRunner {
     this.emit(agentId, taskId, `[${agent.name}] starting task "${task.title}"`);
 
     let outcome: Outcome | null = null;
+    // Self-Refine / Reflexion-lite (Madaan et al. 2023 / Shinn et al. 2023;
+    // open, model-agnostic techniques): don't finalize on the *first*
+    // mark_task_done — ask the model to re-check its own work once, then
+    // finalize on the next mark_task_done. Bounded to exactly one extra
+    // turn (this flips true and never back), so it can't loop forever; the
+    // existing MAX_TURNS/WALL_CLOCK_LIMIT caps still bound the worst case.
+    let verificationRequested = false;
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (state.cancelled) return;
@@ -106,7 +127,7 @@ class AgentRunner {
 
       let completion;
       try {
-        completion = await chatComplete(agentId, { messages, tools: TOOL_SCHEMAS });
+        completion = await llmRouter.chatComplete(agentId, { messages, tools: TOOL_SCHEMAS });
       } catch (err) {
         outcome = { kind: 'failed', reason: `LLM call failed: ${(err as Error).message}` };
         break;
@@ -135,9 +156,22 @@ class AgentRunner {
       for (const toolCall of message.tool_calls) {
         const result = await executeToolCall(workdir, toolCall);
         if (result.kind === 'done') {
-          this.emit(agentId, taskId, `✓ mark_task_done: ${result.summary}`);
-          outcome = { kind: 'done', summary: result.summary };
-          stop = true;
+          if (!verificationRequested) {
+            verificationRequested = true;
+            this.emit(agentId, taskId, `… verifying: "${result.summary}"`);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content:
+                'Before this is finalized: briefly re-check that summary against the task description above. ' +
+                'If it fully satisfies the task, call mark_task_done again to confirm as-is. If you spot a real ' +
+                'gap, fix it first with your tools, then call mark_task_done when actually done.',
+            });
+          } else {
+            this.emit(agentId, taskId, `✓ mark_task_done (confirmed): ${result.summary}`);
+            outcome = { kind: 'done', summary: result.summary };
+            stop = true;
+          }
         } else if (result.kind === 'escalate') {
           this.emit(agentId, taskId, `⚑ escalate: ${result.reason}`);
           outcome = { kind: 'escalate', reason: result.reason };
@@ -161,23 +195,25 @@ class AgentRunner {
       } catch (err) {
         console.error(`[agent-runner] commit failed for ${agentId}`, err);
       }
-      hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'report', body: outcome.summary });
-      hive.updateTaskStatus(taskId, 'done');
+      await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'report', body: outcome.summary });
+      await hive.updateTaskStatus(taskId, 'done');
       agentEvents.emit('exit', { agentId, taskId, exitCode: 0 } satisfies AgentExitEvent);
+      void publishAgentEvent('exit', { agentId, taskId, exitCode: 0 });
       return;
     }
 
-    hive.updateTaskStatus(taskId, 'blocked');
+    await hive.updateTaskStatus(taskId, 'blocked');
     if (outcome.kind === 'escalate') {
       // Sent to Nova for policy triage — an employee flagging something
       // doesn't automatically belong on the human's Approvals Dock.
-      hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'escalation', body: outcome.reason });
+      await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'escalation', body: outcome.reason });
     } else {
-      // A daemon-detected operational failure, not a policy judgment call —
+      // A worker-detected operational failure, not a policy judgment call —
       // goes straight to the human.
-      hive.raiseEscalation({ agentId, description: `Task "${taskId}" ${outcome.reason}. Needs review.` });
+      await hive.raiseEscalation({ agentId, description: `Task "${taskId}" ${outcome.reason}. Needs review.` });
     }
     agentEvents.emit('exit', { agentId, taskId, exitCode: 1 } satisfies AgentExitEvent);
+    void publishAgentEvent('exit', { agentId, taskId, exitCode: 1 });
   }
 }
 

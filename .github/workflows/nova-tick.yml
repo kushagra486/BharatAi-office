@@ -1,0 +1,36 @@
+name: Nova tick
+
+# Vercel's Hobby plan only runs cron jobs once a day, which is too slow for
+# escalation triage / QA passes. Instead this pings the deployed app's
+# protected /api/cron/nova-tick endpoint on a real 5-minute cadence — the
+# same job Netlify's scheduled function used to do. The endpoint itself is
+# idempotent against Postgres, so overlapping/duplicate ticks are harmless.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call nova-tick
+        run: |
+          # APP_URL/CRON_SECRET aren't set until the Vercel project exists and
+          # its secrets are added to this repo — skip cleanly instead of
+          # failing the check on every run until then.
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "APP_URL and/or CRON_SECRET repo secrets aren't set yet — skipping this tick."
+            exit 0
+          fi
+          status=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_URL/api/cron/nova-tick")
+          cat /tmp/body
+          if [ "$status" -ge 300 ]; then
+            echo "nova-tick returned HTTP $status"
+            exit 1
+          fi
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

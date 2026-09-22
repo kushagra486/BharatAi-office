@@ -1,77 +1,23 @@
-import cors from '@fastify/cors';
-import Fastify from 'fastify';
-import { env } from './env';
-import './hive/db'; // initializes + migrates the Hive on import
-import * as hive from './hive/hive';
 import { ensureRepo } from './git/gitModule';
-import { applyHumanResolution, decomposeBrief, startNovaLoop } from './nova/nova';
-import { getUsage } from './llm/router';
-import { attachWebSocketServer } from './ws/server';
+import { startDispatchLoop } from './dispatch';
+import { env } from './env';
 
+// This worker is the one piece of the old daemon that stays a persistent
+// process (PRD §5.1): AgentRunner's real file edits + git commits can't run
+// as a stateless function. Everything else — the HTTP API, auth, Nova's
+// reasoning — moved to frontend/app/api/** and a Netlify Scheduled Function.
+// This process has no HTTP server of its own; it only polls Supabase for
+// ready tasks and runs them.
 async function main() {
   await ensureRepo();
+  startDispatchLoop();
 
-  const app = Fastify({ logger: true });
-  await app.register(cors, { origin: true });
-
-  app.get('/api/health', async () => ({ ok: true }));
-
-  app.get('/api/agents', async () => hive.listAgents());
-
-  app.get('/api/tasks', async () => hive.listTasks());
-
-  app.get('/api/messages', async () => hive.listMessages({ limit: 200 }));
-
-  app.get('/api/brief', async () => hive.getBrief() ?? null);
-
-  app.post<{ Body: { brief: string } }>('/api/brief', async (request, reply) => {
-    const { brief } = request.body ?? { brief: '' };
-    if (!brief || !brief.trim()) {
-      reply.code(400);
-      return { error: 'brief is required' };
-    }
-    const tasks = await decomposeBrief(brief.trim());
-    return { taskCount: tasks.length, tasks };
-  });
-
-  app.get('/api/escalations', async () => hive.listEscalations());
-
-  app.post<{ Params: { id: string } }>('/api/escalations/:id/approve', async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) {
-      reply.code(400);
-      return { error: 'invalid escalation id' };
-    }
-    return applyHumanResolution(id, 'approved');
-  });
-
-  app.post<{ Params: { id: string } }>('/api/escalations/:id/deny', async (request, reply) => {
-    const id = Number(request.params.id);
-    if (!Number.isInteger(id)) {
-      reply.code(400);
-      return { error: 'invalid escalation id' };
-    }
-    return applyHumanResolution(id, 'denied');
-  });
-
-  app.get<{ Querystring: { q?: string } }>('/api/memory/search', async (request) => hive.searchMemory(request.query.q ?? ''));
-
-  // Per-agent LLM call/token visibility across the multi-provider router —
-  // the "token control" surface. Read-only for now; no dedicated frontend
-  // panel yet, but inspectable directly.
-  app.get('/api/llm/usage', async () => getUsage());
-
-  await app.listen({ port: env.DAEMON_PORT, host: '0.0.0.0' });
-
-  attachWebSocketServer(app.server);
-  startNovaLoop();
-
-  console.log(`[daemon] Hive ready at ${env.HIVE_DB_PATH}`);
-  console.log(`[daemon] Project workdir: ${env.PROJECT_WORKDIR}`);
-  console.log(`[daemon] listening on :${env.DAEMON_PORT} (HTTP + WS at /ws)`);
+  console.log(`[worker] project workdir: ${env.PROJECT_WORKDIR}`);
+  console.log(`[worker] dispatch poll interval: ${env.DISPATCH_POLL_INTERVAL_MS}ms`);
+  console.log(`[worker] max concurrent sessions: ${env.MAX_CONCURRENT_SESSIONS}`);
 }
 
 main().catch((err) => {
-  console.error('[daemon] fatal error during startup', err);
+  console.error('[worker] fatal error during startup', err);
   process.exit(1);
 });

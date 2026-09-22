@@ -9,22 +9,21 @@ const DEBOUNCE_MS = 250;
 export interface MemoryRecallPanelProps {
   open: boolean;
   onClose: () => void;
-  /** Live memory entries from the socket, shown immediately while a query is being typed/debounced. */
-  memories: MemoryEntry[];
 }
 
-export function MemoryRecallPanel({ open, onClose, memories }: MemoryRecallPanelProps) {
+// `memory` isn't on the Supabase Realtime publication (see the
+// initial_hive_schema migration) — it's an append-only log, not something
+// that needs live push updates the way tasks/messages/escalations do, so
+// the "no query yet" default view is just an on-open fetch (searchMemory('')
+// already returns the most recent entries) instead of a live-socket-fed prop.
+export function MemoryRecallPanel({ open, onClose }: MemoryRecallPanelProps) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<MemoryEntry[] | null>(null);
+  const [results, setResults] = useState<MemoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const q = query.trim();
-    if (!q) {
-      setResults(null); // show live `memories` when there's no query
-      return;
-    }
     setLoading(true);
     const timer = setTimeout(() => {
       searchMemory(q)
@@ -37,7 +36,7 @@ export function MemoryRecallPanel({ open, onClose, memories }: MemoryRecallPanel
 
   if (!open) return null;
 
-  const list = results ?? memories;
+  const list = results;
 
   return (
     <div

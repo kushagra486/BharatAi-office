@@ -31,3 +31,6 @@ __pycache__/
 # editors
 .vscode/
 .idea/
+
+# Netlify CLI's local site-link state (not user code)
+.netlify/

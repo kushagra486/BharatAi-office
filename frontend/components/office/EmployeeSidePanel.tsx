@@ -2,6 +2,7 @@ import type { Agent, HiveMessage, LlmUsageStats, Task } from '@bharat-ai-office/
 import { agentStatus, tasksByAgentMap } from '@/lib/agentStatus';
 import { formatRelativeTime, formatTokenCount } from '@/lib/format';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
+import { isTyping, useTypewriter } from '@/hooks/useTypewriter';
 import { AgentAvatar } from './AgentAvatar';
 
 export interface EmployeeSidePanelProps {
@@ -46,6 +47,7 @@ export function EmployeeSidePanel({ agent, tasks, messages, terminalBuffer, usag
   const currentTask = agentTasks.find((t) => t.status === 'working') ?? agentTasks[agentTasks.length - 1];
   const activity = agent ? messages.filter((m) => m.from_agent === agent.id || m.to_agent === agent.id).slice(0, 30) : [];
   const status = agent ? (agent.id === 'nova' ? 'idle' : agentStatus(agent.id, tasksByAgentMap(tasks))) : 'idle';
+  const typedTerminal = useTypewriter(terminalBuffer);
 
   return (
     <div
@@ -80,10 +82,12 @@ export function EmployeeSidePanel({ agent, tasks, messages, terminalBuffer, usag
           <div className="flex-1 overflow-y-auto border-b border-line p-4">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-wide text-cyan">Live terminal</p>
             {/* Chunks arrive incrementally over the socket as the agent's tool-use
-                loop completes each turn (model reasoning, then tool calls/results),
-                so simply appending them reads as a live step-by-step log. */}
+                loop completes each turn (model reasoning, then tool calls/results);
+                useTypewriter reveals the accumulated buffer progressively rather
+                than swapping it in all at once, so it reads as a live feed. */}
             <pre className="whitespace-pre-wrap break-words rounded-lg bg-void p-3 font-mono text-[11px] leading-relaxed text-[#8FE9DC]">
-              {terminalBuffer || '(no output yet)'}
+              {typedTerminal || '(no output yet)'}
+              {isTyping(typedTerminal, terminalBuffer) && <span className="animate-cursor-blink text-cyan">▌</span>}
             </pre>
           </div>
 

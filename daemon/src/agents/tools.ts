@@ -12,10 +12,26 @@ const MAX_OUTPUT_CHARS = 4000;
 // No git tool: gitModule.ts is the sole committer (single-committer pattern,
 // same rule as when employees ran on Claude Code — see rolePrompts.ts). No
 // network tool: employees have no outbound-fetch capability, matching the
-// old --disallowedTools WebFetch restriction. run_command additionally
-// denylists a few obviously dangerous patterns as a second line of defense
-// on top of the cwd sandboxing below.
-const DENIED_COMMAND_PATTERNS = [/\bgit\b/, /\bsudo\b/, /\bcurl\b/, /\bwget\b/, /\bssh\b/, /rm\s+-rf\s+\/(?!\S)/];
+// old --disallowedTools WebFetch restriction.
+//
+// run_command's `cwd: workdir` does NOT contain the shell by itself — it
+// only sets the starting directory; `cat ../otherAgent/secret`, `cd .. &&
+// rm -rf *`, or an absolute path all still work unless blocked explicitly.
+// Verified this empirically before adding the traversal/absolute-path/home
+// patterns below. This is still a denylist, not real OS sandboxing (a
+// sufficiently obfuscated command — e.g. base64-decoding ".." at runtime —
+// could still get around it), but it closes the straightforward escapes.
+const DENIED_COMMAND_PATTERNS = [
+  /\bgit\b/,
+  /\bsudo\b/,
+  /\bcurl\b/,
+  /\bwget\b/,
+  /\bssh\b/,
+  /rm\s+-rf\s+\/(?!\S)/,
+  /(^|[\s"'(])\.\.(?=$|[\s"'/)])/, // ".." as its own path segment (cd .., ../x, etc.)
+  /(^|\s)~(?=$|[\s/])/, // ~ / ~/x home-directory expansion
+  /(^|\s)\/(?!dev\/(null|stdout|stderr)\b)\S*/, // absolute paths (incl. bare "/"), except common /dev redirects
+];
 
 export const TOOL_SCHEMAS: ChatCompletionTool[] = [
   {
@@ -109,24 +125,54 @@ function resolveInWorkdir(workdir: string, requestedPath: string): string {
   return resolved;
 }
 
+// resolveInWorkdir only checks path *text* — a symlink planted inside the
+// workdir by run_command (e.g. `ln -s / evil`) resolves to a string that
+// passes that check but points the real file operation outside it. This
+// re-checks the *real* (symlink-resolved) path. Walks up to the nearest
+// existing ancestor so it also covers a write_file target that doesn't
+// exist yet (its containing directory does, since writeFile mkdir's it first).
+async function assertRealContainment(workdir: string, target: string): Promise<void> {
+  const root = await fs.realpath(workdir);
+  let probe = target;
+  while (true) {
+    try {
+      const real = await fs.realpath(probe);
+      const realTarget = probe === target ? real : path.join(real, path.relative(probe, target));
+      if (realTarget !== root && !realTarget.startsWith(root + path.sep)) {
+        throw new Error('path escapes your working directory (symlink) — not allowed');
+      }
+      return;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      const parent = path.dirname(probe);
+      if (parent === probe) throw err; // reached filesystem root without finding an existing ancestor
+      probe = parent;
+    }
+  }
+}
+
 function truncate(text: string): string {
   return text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n…(truncated)` : text;
 }
 
 async function readFile(workdir: string, args: { path: string }): Promise<string> {
   const target = resolveInWorkdir(workdir, args.path);
+  await assertRealContainment(workdir, target);
   return truncate(await fs.readFile(target, 'utf-8'));
 }
 
 async function writeFile(workdir: string, args: { path: string; content: string }): Promise<string> {
   const target = resolveInWorkdir(workdir, args.path);
+  await assertRealContainment(workdir, target);
   await fs.mkdir(path.dirname(target), { recursive: true });
+  await assertRealContainment(workdir, target); // mkdir can itself create/traverse through a symlinked parent — recheck after
   await fs.writeFile(target, args.content, 'utf-8');
   return `wrote ${args.content.length} bytes to ${args.path}`;
 }
 
 async function listDirectory(workdir: string, args: { path?: string }): Promise<string> {
   const target = resolveInWorkdir(workdir, args.path ?? '.');
+  await assertRealContainment(workdir, target);
   const entries = await fs.readdir(target, { withFileTypes: true });
   return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join('\n') || '(empty directory)';
 }
