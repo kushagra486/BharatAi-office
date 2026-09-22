@@ -5,6 +5,21 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- Complexity-aware dynamic model routing: 7 of 11 employees (the heavier
+  "code" tier) and 3 (the lighter "light" tier) now resolve their model
+  once per task from a shared pool spanning all 3 configured providers,
+  ranked by live rate-limit headroom and observed latency
+  (`model_latency_stats`, a simple exponential moving average recorded
+  after every real call) — instead of a single model fixed at deploy time.
+  Picked once per task (not per turn) to keep one task's tool-calling
+  behavior consistent across all its turns; falls back to the static
+  assignment for any read failure or for Nova (kept on its fixed
+  assignment deliberately — single-shot JSON calls, not a multi-turn loop,
+  don't benefit from per-task pinning the same way). Only the
+  already-verified 8 models are in a pool today — Gemini/SambaNova/
+  Qwen3-Coder are real candidates once a key exists and each passes the
+  same live tool-calling verification, not before.
+
 - Automation panel: a live cross-agent activity feed (every agent's tool
   calls in one chronological stream, not just whichever one is currently
   selected in the side panel — reuses the same Realtime broadcast channel

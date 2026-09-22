@@ -136,6 +136,14 @@ class AgentRunner {
 
     this.emit(agentId, taskId, `[${agent.name}] starting task "${task.title}"`);
 
+    // Resolved once for the whole task (not re-picked per turn) — see
+    // pickTaskAssignment's own comment for why: keeps this task's
+    // tool-calling behavior consistent across all its turns. The next task
+    // (even for the same agent) re-picks fresh against then-current
+    // rate-limit headroom and latency.
+    const assignment = await llmRouter.pickTaskAssignment(agentId);
+    this.emit(agentId, taskId, `→ routed to ${assignment.primary.provider}:${assignment.primary.model} for this task`);
+
     let outcome: Outcome | null = null;
     // Self-Refine / Reflexion-lite (Madaan et al. 2023 / Shinn et al. 2023;
     // open, model-agnostic techniques): don't finalize on the *first*
@@ -173,7 +181,7 @@ class AgentRunner {
 
       let completion;
       try {
-        completion = await llmRouter.chatComplete(agentId, { messages, tools: TOOL_SCHEMAS });
+        completion = await llmRouter.chatComplete(agentId, { messages, tools: TOOL_SCHEMAS }, assignment);
       } catch (err) {
         outcome = { kind: 'failed', reason: `LLM call failed: ${(err as Error).message}` };
         break;

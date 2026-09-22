@@ -110,6 +110,37 @@ export async function reconcileTokens(provider: ProviderId, estimatedTokens: num
   if (error) throw new Error(error.message);
 }
 
+/**
+ * A pure read of current usage against the same three budgets acquireSlot
+ * enforces below — used only to RANK candidate models before picking one
+ * (see router.ts's pickTaskAssignment), never to gate or commit anything
+ * itself. Safe to be slightly stale: whichever candidate wins still goes
+ * through the real atomic acquireSlot, so a stale read here can at worst
+ * make the picker's ranking slightly wrong, not double-spend budget — that
+ * failure mode is categorically different from (and doesn't reintroduce)
+ * the partial-commit bug the TPM work fixed.
+ */
+export async function getHeadroomFraction(provider: ProviderId): Promise<number> {
+  const minuteLimit = RPM_LIMITS[provider];
+  const dayLimit = RPD_LIMITS[provider];
+  const tokenLimit = TPM_LIMITS[provider];
+
+  const { data, error } = await db().from('rate_limit_windows').select('window_type, window_start, count').eq('provider', provider);
+  if (error) throw new Error(error.message);
+
+  const now = Date.now();
+  function fractionFor(windowType: string, windowMs: number, limit: number | undefined): number {
+    if (limit === undefined) return 1; // no configured budget = not a constraint
+    const row = data?.find((r) => r.window_type === windowType);
+    if (!row) return 1; // never used yet
+    const age = now - new Date(row.window_start as string).getTime();
+    if (age >= windowMs) return 1; // window has already rolled over
+    return Math.max(0, 1 - (row.count as number) / limit);
+  }
+
+  return Math.min(fractionFor('minute', 60_000, minuteLimit), fractionFor('day', DAY_MS, dayLimit), fractionFor('minute_tokens', 60_000, tokenLimit));
+}
+
 function isRetryableStatus(status: unknown): boolean {
   return status === 429 || (typeof status === 'number' && status >= 500);
 }

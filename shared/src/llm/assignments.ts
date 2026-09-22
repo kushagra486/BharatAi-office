@@ -158,3 +158,54 @@ export function assignmentFor(agentId: string): Assignment {
   if (!assignment) throw new Error(`no LLM assignment configured for agent "${agentId}"`);
   return assignment;
 }
+
+// --- dynamic pool-based routing (router.ts's pickTaskAssignment) -----------
+//
+// ASSIGNMENTS above stays exactly as it was — it's now the static bootstrap
+// this falls back to if the live picker can't resolve a pool (e.g. Nova,
+// which isn't tiered, or any error in the live headroom/latency read).
+//
+// Only verified-working models go in a pool (same tool-calling bar as
+// ASSIGNMENTS' own comment describes) — Gemini/SambaNova/Qwen3-Coder are
+// real candidates once a key exists and each is verified live, but nothing
+// unverified belongs in a pool real tasks route through.
+//
+// Nova is deliberately NOT tiered: its calls are single-shot JSON reasoning
+// (chatCompleteJson), not a 25-turn tool-use loop, so per-task pinning's
+// main benefit (consistency across many turns) doesn't apply, and it's the
+// highest-stakes seat — keeping it on its known-good static assignment is
+// the safer choice.
+export type Tier = 'code' | 'light';
+
+export const AGENT_TIER: Partial<Record<string, Tier>> = {
+  kael: 'code',
+  priya: 'code',
+  devraj: 'code',
+  arjun: 'code',
+  raghav: 'code',
+  farhan: 'code',
+  simran: 'code',
+  meera: 'light',
+  tanya: 'light',
+  isha: 'light',
+};
+
+// "code": heavier reasoning/implementation work (architecture, backend,
+// frontend, QA, security, DevOps, design specs).
+// "light": coordination/analytics/writing — lower-stakes, higher-volume.
+// Each pool spans all 3 configured providers so a single provider's rate
+// limit never stalls a whole tier at once.
+export const TIER_POOLS: Record<Tier, ModelRef[]> = {
+  code: [
+    { provider: 'nvidia', model: 'z-ai/glm-5.3' },
+    { provider: 'groq', model: 'openai/gpt-oss-120b' },
+    { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
+    { provider: 'nvidia', model: 'z-ai/glm-5.3-flash' },
+  ],
+  light: [
+    { provider: 'groq', model: 'openai/gpt-oss-20b' },
+    { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
+    { provider: 'openrouter', model: 'liquid/lfm-2.5-2.6b:free' },
+    { provider: 'openrouter', model: 'nex-agi/nex-n2.5-pro:free' },
+  ],
+};

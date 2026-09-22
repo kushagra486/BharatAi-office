@@ -1,8 +1,8 @@
 import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { LlmUsageByAgent, LlmUsageStats } from '../llm-types';
-import { assignmentFor, type ModelRef } from './assignments';
+import { AGENT_TIER, TIER_POOLS, assignmentFor, type Assignment, type ModelRef } from './assignments';
 import { getClient, isProviderConfigured } from './providers';
-import { acquireSlot, reconcileTokens, withRetry } from './rateLimiter';
+import { acquireSlot, getHeadroomFraction, reconcileTokens, withRetry } from './rateLimiter';
 import { db } from '../supabaseHive';
 
 export interface ChatCompleteParams {
@@ -42,10 +42,17 @@ function estimateTokens(params: ChatCompleteParams): number {
   return Math.ceil((promptChars + toolsChars) / CHARS_PER_TOKEN) + COMPLETION_ALLOWANCE_TOKENS;
 }
 
+/** Fire-and-forget — a latency-logging hiccup must never fail or slow down the actual LLM call it's measuring. */
+export async function recordLatency(provider: ModelRef['provider'], model: string, latencyMs: number): Promise<void> {
+  const { error } = await db().rpc('record_model_latency', { p_provider: provider, p_model: model, p_latency_ms: latencyMs });
+  if (error) throw new Error(error.message);
+}
+
 async function callModel(ref: ModelRef, params: ChatCompleteParams): Promise<ChatCompletion> {
   const estimatedTokens = estimateTokens(params);
   await acquireSlot(ref.provider, ref.model, estimatedTokens);
   const client = getClient(ref.provider);
+  const startedAt = Date.now();
   try {
     const completion = await withRetry(() =>
       client.chat.completions.create({
@@ -57,6 +64,9 @@ async function callModel(ref: ModelRef, params: ChatCompleteParams): Promise<Cha
       })
     );
     await reconcileTokens(ref.provider, estimatedTokens, completion.usage?.total_tokens ?? estimatedTokens);
+    recordLatency(ref.provider, ref.model, Date.now() - startedAt).catch((err) =>
+      console.error(`[llm-router] failed to record latency for ${ref.provider}:${ref.model}`, err)
+    );
     return completion;
   } catch (err) {
     // The call never happened (or never finished), so free the reservation
@@ -68,16 +78,82 @@ async function callModel(ref: ModelRef, params: ChatCompleteParams): Promise<Cha
   }
 }
 
+// Cold-start assumption for a (provider, model) with no recorded latency
+// samples yet — keeps an untested candidate from being unfairly favored
+// (0ms) or starved (Infinity) in the ranking below until real data exists.
+const DEFAULT_LATENCY_MS = 2500;
+
+// A candidate below this headroom fraction is close enough to its rate
+// limit that picking it "because it's historically fast" would likely just
+// mean an immediate 429 and a fallback anyway — better to rank by
+// remaining headroom instead once everyone's this tight.
+const MIN_HEADROOM_TO_RANK_BY_LATENCY = 0.1;
+
+async function getLatencyMap(): Promise<Map<string, number>> {
+  const { data, error } = await db().from('model_latency_stats').select('provider, model, avg_latency_ms');
+  if (error) throw new Error(error.message);
+  const map = new Map<string, number>();
+  for (const row of data ?? []) map.set(`${row.provider}:${row.model}`, row.avg_latency_ms as number);
+  return map;
+}
+
+/**
+ * Resolves a task's model assignment ONCE — called by AgentRunner at the
+ * start of a task's loop, not per turn. Pinning per-task (not per-call)
+ * keeps one task's tool-calling behavior consistent across all its turns
+ * instead of potentially switching models mid-task, which would risk
+ * inconsistent style/quality within a single piece of work for no real
+ * benefit (the next task re-picks fresh, so the system still adapts).
+ *
+ * Ranks the agent's tier pool by live rate-limit headroom + observed
+ * latency. Falls back to the static ASSIGNMENTS bootstrap (assignmentFor)
+ * for any agent without a tier (Nova — see AGENT_TIER's comment) or on any
+ * read failure, so a routing-layer hiccup degrades to today's known-good
+ * fixed behavior instead of blocking a task from starting.
+ */
+export async function pickTaskAssignment(agentId: string): Promise<Assignment> {
+  const tier = AGENT_TIER[agentId];
+  if (!tier) return assignmentFor(agentId);
+
+  try {
+    const pool = TIER_POOLS[tier].filter((ref) => isProviderConfigured(ref.provider));
+    if (pool.length === 0) return assignmentFor(agentId);
+
+    const latencyMap = await getLatencyMap();
+    const scored = await Promise.all(
+      pool.map(async (ref) => ({
+        ref,
+        headroom: await getHeadroomFraction(ref.provider),
+        latency: latencyMap.get(`${ref.provider}:${ref.model}`) ?? DEFAULT_LATENCY_MS,
+      }))
+    );
+
+    const withHeadroom = scored.filter((s) => s.headroom > MIN_HEADROOM_TO_RANK_BY_LATENCY);
+    const ranked =
+      withHeadroom.length > 0
+        ? withHeadroom.sort((a, b) => a.latency - b.latency)
+        : scored.sort((a, b) => b.headroom - a.headroom); // everyone's tight — just try whoever has the most room
+
+    return { primary: ranked[0].ref, fallbacks: ranked.slice(1).map((s) => s.ref) };
+  } catch (err) {
+    console.error(`[llm-router] pickTaskAssignment failed for "${agentId}", falling back to static assignment`, err);
+    return assignmentFor(agentId);
+  }
+}
+
 /**
  * The one entry point both Nova and every employee's AgentRunner call
- * through. Resolves the agent's assigned provider+model, rate-limits and
- * retries against it, and on exhausted retries walks the fallback chain
- * (each on a different provider) rather than failing outright — this is
- * the "no clogging" mechanism: a rate-limited or down provider degrades to
- * a different one instead of blocking the agent.
+ * through. Resolves the agent's assigned provider+model (or uses a
+ * pre-resolved `assignmentOverride` — see pickTaskAssignment, which
+ * AgentRunner calls once per task so every turn of that task stays on the
+ * same picked model), rate-limits and retries against it, and on exhausted
+ * retries walks the fallback chain (each on a different provider) rather
+ * than failing outright — this is the "no clogging" mechanism: a
+ * rate-limited or down provider degrades to a different one instead of
+ * blocking the agent.
  */
-export async function chatComplete(agentId: string, params: ChatCompleteParams): Promise<ChatCompletion> {
-  const assignment = assignmentFor(agentId);
+export async function chatComplete(agentId: string, params: ChatCompleteParams, assignmentOverride?: Assignment): Promise<ChatCompletion> {
+  const assignment = assignmentOverride ?? assignmentFor(agentId);
   const candidates = [assignment.primary, ...assignment.fallbacks].filter((ref) => isProviderConfigured(ref.provider));
 
   if (candidates.length === 0) {
