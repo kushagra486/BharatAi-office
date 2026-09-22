@@ -5,6 +5,16 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- Automation panel: a live cross-agent activity feed (every agent's tool
+  calls in one chronological stream, not just whichever one is currently
+  selected in the side panel — reuses the same Realtime broadcast channel
+  that already fed that side panel) plus a diff preview per completed task.
+  Diffs are captured from the actual git commit (`git diff-tree -p`) and
+  stored in a separate "project-diffs" Storage bucket, keyed by task id —
+  kept separate from the Files tab's bucket since a diff isn't a
+  deliverable and would otherwise masquerade as a fake agent folder in that
+  listing. "Abandon project" now clears this bucket too.
+
 - Cancel/reset button for a stuck or unwanted active project
 - Token usage breakdown by provider/model in the UI (not just a per-agent total)
 - Files tab: every file an agent commits is now mirrored into Supabase

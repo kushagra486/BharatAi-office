@@ -124,3 +124,14 @@ export async function getProjectFileDownloadUrl(path: string): Promise<string> {
   const { url } = await request<{ url: string }>(`/api/files/download?path=${encodeURIComponent(path)}`);
   return url;
 }
+
+/** The diff text a task's commit produced, or null if it never committed one (still running, failed early, or predates this feature). */
+export async function getTaskDiff(taskId: string): Promise<string | null> {
+  const { url } = await request<{ url: string | null }>(`/api/tasks/${encodeURIComponent(taskId)}/diff`);
+  if (!url) return null;
+  // The signed URL's signature is its own auth — a plain unauthenticated
+  // fetch to it is correct, same as the Files tab's download flow.
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  return res.text();
+}

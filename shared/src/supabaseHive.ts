@@ -275,6 +275,11 @@ export async function clearProject(): Promise<void> {
   } catch (err) {
     console.error('[supabaseHive] failed to clear project-files storage during abandon', err);
   }
+  try {
+    await clearTaskDiffs();
+  } catch (err) {
+    console.error('[supabaseHive] failed to clear project-diffs storage during abandon', err);
+  }
 }
 
 // --- project files (Supabase Storage) ---------------------------------------
@@ -336,4 +341,40 @@ export async function clearProjectFiles(): Promise<void> {
     .storage.from(PROJECT_FILES_BUCKET)
     .remove(files.map((f) => f.path));
   if (error) throw new Error(error.message);
+}
+
+// --- task diffs (Supabase Storage) -------------------------------------------
+//
+// A separate bucket from project-files (not folded into it) — a diff isn't
+// a deliverable, it's an audit/preview artifact, and project-files' listing
+// logic treats every top-level folder as an agent id, which a "diffs"
+// folder would falsely masquerade as. Keyed by taskId, not agentId, since
+// that's what the Automation panel looks it up by (a task -> what changed
+// to finish it).
+
+const PROJECT_DIFFS_BUCKET = 'project-diffs';
+
+export async function uploadTaskDiff(taskId: string, diff: string): Promise<void> {
+  if (!diff.trim()) return; // nothing changed (shouldn't normally happen for a 'done' outcome, but not worth erroring over)
+  const { error } = await db()
+    .storage.from(PROJECT_DIFFS_BUCKET)
+    .upload(`${taskId}.diff`, diff, { contentType: 'text/plain', upsert: true });
+  if (error) throw new Error(error.message);
+}
+
+/** A short-lived signed URL for a task's diff text, or undefined if this task has none (still running, failed before committing, or predates this feature). */
+export async function getTaskDiffUrl(taskId: string): Promise<string | undefined> {
+  const { data, error } = await db().storage.from(PROJECT_DIFFS_BUCKET).createSignedUrl(`${taskId}.diff`, 300);
+  if (error) return undefined; // object not found is the expected case, not a real error
+  return data.signedUrl;
+}
+
+export async function clearTaskDiffs(): Promise<void> {
+  const { data, error } = await db().storage.from(PROJECT_DIFFS_BUCKET).list('', { limit: 1000 });
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) return;
+  const { error: removeError } = await db()
+    .storage.from(PROJECT_DIFFS_BUCKET)
+    .remove(data.map((f) => f.name));
+  if (removeError) throw new Error(removeError.message);
 }

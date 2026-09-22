@@ -253,8 +253,9 @@ class AgentRunner {
   private async finish(agentId: string, taskId: string, outcome: Outcome): Promise<void> {
     if (outcome.kind === 'done') {
       try {
-        const { changedFiles } = await commitAgentWork(agentId, `${agentId}: ${outcome.summary}`.slice(0, 200));
+        const { changedFiles, diff } = await commitAgentWork(agentId, `${agentId}: ${outcome.summary}`.slice(0, 200));
         if (changedFiles.length > 0) await this.uploadChangedFiles(changedFiles);
+        if (diff) await hive.uploadTaskDiff(taskId, diff);
       } catch (err) {
         console.error(`[agent-runner] commit failed for ${agentId}`, err);
       }

@@ -47,12 +47,15 @@ export async function ensureRepo(): Promise<void> {
   });
 }
 
-export async function commitAgentWork(agentId: string, message: string): Promise<{ committed: boolean; changedFiles: string[] }> {
+export async function commitAgentWork(
+  agentId: string,
+  message: string
+): Promise<{ committed: boolean; changedFiles: string[]; diff: string }> {
   return enqueue(async () => {
     await run(['add', agentId]);
     const { stdout } = await run(['status', '--porcelain', '--', agentId]);
     if (!stdout.trim()) {
-      return { committed: false, changedFiles: [] };
+      return { committed: false, changedFiles: [], diff: '' };
     }
     await run(['commit', '-m', message]);
     // Repo-root-relative paths (so already "{agentId}/relative/path"), used
@@ -63,7 +66,11 @@ export async function commitAgentWork(agentId: string, message: string): Promise
       .split('\n')
       .map((f) => f.trim())
       .filter(Boolean);
-    return { committed: true, changedFiles };
+    // The unified patch text for the commit — powers the Automation panel's
+    // diff preview so a human can see exactly what an agent changed without
+    // downloading every file individually.
+    const { stdout: diff } = await run(['diff-tree', '-p', '--no-color', '-r', 'HEAD']);
+    return { committed: true, changedFiles, diff };
   });
 }
 

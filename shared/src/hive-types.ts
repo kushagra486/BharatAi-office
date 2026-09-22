@@ -16,6 +16,19 @@ export interface Agent {
   home_y: number;
 }
 
+// One entry in the Automation panel's live cross-agent feed — built
+// client-side from the same 'agent-events' Realtime broadcast channel that
+// already feeds the employee side panel's per-agent terminal, not a
+// persisted table (see daemon/src/realtimeBroadcast.ts's comment for why).
+export interface ActivityFeedEntry {
+  id: string;
+  agentId: string;
+  taskId: string;
+  kind: 'output' | 'done' | 'failed';
+  text: string;
+  at: string;
+}
+
 // A file an agent has committed to the project's git repo, mirrored into
 // Supabase Storage (bucket "project-files") so the frontend can list and
 // download it without needing direct access to the worker's filesystem.
