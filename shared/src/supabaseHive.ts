@@ -248,3 +248,21 @@ export async function getBrief(): Promise<BriefRecord | undefined> {
   if (error) throw new Error(error.message);
   return data ? rowToBrief(data as BriefRow) : undefined;
 }
+
+/**
+ * Abandons the current project: clears its tasks, mailbox messages, and the
+ * brief row itself, so the Brief Strip's composer reopens immediately. Any
+ * task still `working` belongs to an in-flight AgentRunner loop on the
+ * persistent worker that this can't reach — deleting its row here just
+ * means the worker's eventual `updateTaskStatus`/`sendMessage` call for it
+ * fails silently against a missing row, which is fine (its result is
+ * simply discarded).
+ */
+export async function clearProject(): Promise<void> {
+  const { error: messagesError } = await db().from('messages').delete().neq('id', 0);
+  if (messagesError) throw new Error(messagesError.message);
+  const { error: tasksError } = await db().from('tasks').delete().neq('id', '');
+  if (tasksError) throw new Error(tasksError.message);
+  const { error: briefError } = await db().from('brief').delete().eq('id', 1);
+  if (briefError) throw new Error(briefError.message);
+}

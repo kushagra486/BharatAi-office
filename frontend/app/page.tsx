@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { useHiveSocket } from '@/hooks/useHiveSocket';
 import { useLlmUsage } from '@/hooks/useLlmUsage';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
-import { approveEscalation, denyEscalation, submitBrief } from '@/lib/daemonApi';
+import { abandonProject, approveEscalation, denyEscalation, submitBrief } from '@/lib/daemonApi';
 import { HudBar } from '@/components/office/HudBar';
 import { BriefStrip } from '@/components/office/BriefStrip';
 import { ApprovalsDock } from '@/components/office/ApprovalsDock';
@@ -53,7 +53,7 @@ export default function Home() {
         onOpenRecall={() => setRecallOpen(true)}
         onOpenApprovals={() => document.getElementById('approvals-dock')?.scrollIntoView({ behavior: 'smooth' })}
       />
-      <BriefStrip brief={brief} onSubmitBrief={submitBrief} />
+      <BriefStrip brief={brief} onSubmitBrief={submitBrief} onAbandonProject={abandonProject} />
 
       <div className="flex flex-none flex-col overflow-hidden lg:flex-1">
         {/* Stacked on mobile (floor on top, roster below, both full-width) — side by side only from `lg` up, matching TeamRoster's own responsive width/border. Below `lg` the roster isn't hidden anymore (it used to be), so every agent's status/job-suggestion/tokens/model is reachable on a phone without switching pages. */}

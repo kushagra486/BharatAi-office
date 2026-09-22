@@ -73,6 +73,10 @@ export async function submitBrief(brief: string): Promise<void> {
   await postJson('/api/brief', { brief });
 }
 
+export async function abandonProject(): Promise<void> {
+  await request('/api/brief', { method: 'DELETE' });
+}
+
 export async function approveEscalation(id: number): Promise<Escalation> {
   return postJson<Escalation>(`/api/escalations/${id}/approve`);
 }
