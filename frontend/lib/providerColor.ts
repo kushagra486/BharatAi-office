@@ -9,6 +9,8 @@ const PROVIDER_COLOR: Record<string, string> = {
   groq: '#F97316', // orange
   nvidia: '#22C55E', // green (NVIDIA brand green)
   openrouter: '#A855F7', // purple
+  gemini: '#4285F4', // blue (Google brand blue)
+  huggingface: '#FFD21E', // yellow (Hugging Face brand yellow)
 };
 
 const UNKNOWN_COLOR = '#4B5563'; // neutral gray — no usage recorded yet

@@ -193,19 +193,31 @@ export const AGENT_TIER: Partial<Record<string, Tier>> = {
 // "code": heavier reasoning/implementation work (architecture, backend,
 // frontend, QA, security, DevOps, design specs).
 // "light": coordination/analytics/writing — lower-stakes, higher-volume.
-// Each pool spans all 3 configured providers so a single provider's rate
-// limit never stalls a whole tier at once.
+// Each pool spans as many distinct providers as verified so a single
+// provider's rate limit never stalls a whole tier at once.
+//
+// gemini:gemini-flash-latest and huggingface:deepseek-ai/DeepSeek-V3.1 were
+// added after a live verification pass (real tool_calls via
+// tool_choice:'required', not just a plain completion) — same bar as every
+// other entry here. openrouter:poolside/laguna-s-2.1:free passed the same
+// check; nvidia/nemotron-3-ultra-550b-a55b:free (also tested that pass)
+// failed it — wrote prose describing a fake tool call instead of a real
+// one — and openrouter:qwen/qwen3-coder:free no longer exists under this
+// account's key, so neither is here despite looking good on paper.
 export const TIER_POOLS: Record<Tier, ModelRef[]> = {
   code: [
     { provider: 'nvidia', model: 'z-ai/glm-5.3' },
     { provider: 'groq', model: 'openai/gpt-oss-120b' },
     { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
     { provider: 'nvidia', model: 'z-ai/glm-5.3-flash' },
+    { provider: 'gemini', model: 'gemini-flash-latest' },
+    { provider: 'huggingface', model: 'deepseek-ai/DeepSeek-V3.1' },
   ],
   light: [
     { provider: 'groq', model: 'openai/gpt-oss-20b' },
     { provider: 'nvidia', model: 'meta/llama-3.2-11b-vision-instruct' },
     { provider: 'openrouter', model: 'liquid/lfm-2.5-2.6b:free' },
     { provider: 'openrouter', model: 'nex-agi/nex-n2.5-pro:free' },
+    { provider: 'openrouter', model: 'poolside/laguna-s-2.1:free' },
   ],
 };

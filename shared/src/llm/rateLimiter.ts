@@ -9,14 +9,25 @@ import { db } from '../supabaseHive';
 // Netlify Scheduled Function) and the worker's employee calls run as
 // separate processes hitting the same provider key, the increment has to
 // be a real atomic database operation instead.
+// gemini/huggingface: Google no longer publishes a fixed free-tier number
+// (ai.google.dev's own rate-limits page as of this writing says it's
+// account-specific, viewable only in each user's AI Studio dashboard) and
+// Hugging Face's Inference Providers router is credit-limited rather than
+// request-limited. Both figures below are deliberately conservative
+// placeholders, not verified published numbers — tighten them once real
+// 429s (or their absence) show what the actual ceiling is.
 const RPM_LIMITS: Record<ProviderId, number> = {
   nvidia: 30,
   groq: 24,
   openrouter: 15,
+  gemini: 10,
+  huggingface: 10,
 };
 
 const RPD_LIMITS: Partial<Record<ProviderId, number>> = {
   openrouter: 45,
+  gemini: 250,
+  huggingface: 200,
 };
 
 // Tokens-per-minute budgets, tracked separately from RPM/RPD above — a

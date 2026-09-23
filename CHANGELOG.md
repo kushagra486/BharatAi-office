@@ -5,6 +5,26 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- Added Gemini and Hugging Face as 4th/5th LLM providers (via Google's
+  OpenAI-compatibility shim and Hugging Face's Inference Providers router
+  respectively — not the `transformers` Python library, which runs models
+  locally and doesn't fit this project at all). Both went through the same
+  live tool-calling verification bar as every other model here before being
+  added to the "code" tier pool: `gemini-flash-latest` and
+  `deepseek-ai/DeepSeek-V3.1` both make real tool calls, not fabricated
+  ones. Also added `poolside/laguna-s-2.1:free` (OpenRouter, already
+  configured) to the "light" tier after the same check.
+  `nvidia/nemotron-3-ultra-550b-a55b:free` and `qwen/qwen3-coder:free` were
+  tested too and rejected — the former fabricates tool calls, the latter
+  no longer exists under the tested account.
+  Rate limits for both new providers are conservative placeholders, not
+  verified published numbers — Google no longer publishes a fixed
+  free-tier figure (it's account-specific, AI Studio dashboard only), and
+  Hugging Face's router is credit-limited rather than request-limited.
+  Skipped Mistral's `codestral-latest` despite it also passing verification
+  — it isn't a free-tier model and would likely bill the account; every
+  other model in this system runs on a real free tier.
+
 - Surfaced a real bug found while verifying the dynamic routing above: model
   latency isn't being recorded from the live worker despite the DB-side
   function and every read/write path checking out fine when tested directly
