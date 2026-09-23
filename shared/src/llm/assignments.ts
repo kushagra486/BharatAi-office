@@ -165,10 +165,14 @@ export function assignmentFor(agentId: string): Assignment {
 // this falls back to if the live picker can't resolve a pool (e.g. Nova,
 // which isn't tiered, or any error in the live headroom/latency read).
 //
-// Only verified-working models go in a pool (same tool-calling bar as
-// ASSIGNMENTS' own comment describes) — Gemini/SambaNova/Qwen3-Coder are
-// real candidates once a key exists and each is verified live, but nothing
-// unverified belongs in a pool real tasks route through.
+// Only verified-working AND genuinely free models go in a pool (same
+// tool-calling bar as ASSIGNMENTS' own comment describes). SambaNova was
+// tested and rejected on cost, not capability — every model on its account
+// carries real per-token pricing and the account has zero balance with no
+// payment method attached, so calls fail with 402 PAYMENT_METHOD_REQUIRED
+// before ever reaching a tool-calling test. Mistral's codestral-latest was
+// rejected the same way earlier. Neither belongs here unless that's a
+// real cost tradeoff someone explicitly signs up for later.
 //
 // Nova is deliberately NOT tiered: its calls are single-shot JSON reasoning
 // (chatCompleteJson), not a 25-turn tool-use loop, so per-task pinning's
