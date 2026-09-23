@@ -27,11 +27,18 @@ function FeedRow({ entry, agents }: { entry: ActivityFeedEntry; agents: Agent[] 
   // employee side panel's per-agent terminal is still the place for the
   // full unclipped text.
   const preview = entry.text.length > 160 ? `${entry.text.slice(0, 160)}…` : entry.text;
+  // Non-fatal router warnings (e.g. latency tracking failing, which just
+  // means the picker falls back to headroom-only ranking) are emitted as
+  // plain 'output' chunks — there's no dedicated broadcast kind for them —
+  // so detect the ⚠ prefix router.ts's onWarning callback always sends and
+  // color it distinctly instead of blending into normal tool-call output.
+  const isWarning = entry.kind === 'output' && entry.text.startsWith('⚠');
+  const colorClass = isWarning ? 'text-amber' : KIND_COLOR[entry.kind];
   return (
-    <li className="flex items-start gap-2 border-b border-line/60 py-1.5 font-mono text-[11px] last:border-b-0">
+    <li className={`flex items-start gap-2 border-b py-1.5 font-mono text-[11px] last:border-b-0 ${isWarning ? 'border-amber/30 bg-amber/5' : 'border-line/60'}`}>
       <span className="shrink-0 text-[#6B7686]">{formatRelativeTime(entry.at)}</span>
       <span className="shrink-0 font-semibold text-[#C7D0DA]">{agentName(agents, entry.agentId)}</span>
-      <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${KIND_COLOR[entry.kind]}`}>{preview}</span>
+      <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${colorClass}`}>{preview}</span>
     </li>
   );
 }

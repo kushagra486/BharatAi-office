@@ -181,7 +181,7 @@ class AgentRunner {
 
       let completion;
       try {
-        completion = await llmRouter.chatComplete(agentId, { messages, tools: TOOL_SCHEMAS }, assignment);
+        completion = await llmRouter.chatComplete(agentId, { messages, tools: TOOL_SCHEMAS }, assignment, (msg) => this.emit(agentId, taskId, msg));
       } catch (err) {
         outcome = { kind: 'failed', reason: `LLM call failed: ${(err as Error).message}` };
         break;

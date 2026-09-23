@@ -5,6 +5,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- Surfaced a real bug found while verifying the dynamic routing above: model
+  latency isn't being recorded from the live worker despite the DB-side
+  function and every read/write path checking out fine when tested directly
+  over HTTP — root cause still unconfirmed (no Railway log access to pin it
+  down further). It was silently swallowed before; now a failure shows up
+  as an amber-highlighted warning line in the Automation panel's live feed
+  instead, so it's visible without needing worker logs at all.
+
 - Complexity-aware dynamic model routing: 7 of 11 employees (the heavier
   "code" tier) and 3 (the lighter "light" tier) now resolve their model
   once per task from a shared pool spanning all 3 configured providers,

@@ -48,7 +48,15 @@ export async function recordLatency(provider: ModelRef['provider'], model: strin
   if (error) throw new Error(error.message);
 }
 
-async function callModel(ref: ModelRef, params: ChatCompleteParams): Promise<ChatCompletion> {
+// router.ts lives in the client/server-agnostic `shared` package, so it
+// can't import daemon/src/realtimeBroadcast.ts directly (that would invert
+// the intended dependency direction — daemon depends on shared, never the
+// reverse). This optional callback lets a daemon-side caller (AgentRunner)
+// surface a warning on its own live feed without router.ts knowing
+// anything about broadcast channels. Nova's calls simply omit it.
+type WarnFn = (message: string) => void;
+
+async function callModel(ref: ModelRef, params: ChatCompleteParams, onWarning?: WarnFn): Promise<ChatCompletion> {
   const estimatedTokens = estimateTokens(params);
   await acquireSlot(ref.provider, ref.model, estimatedTokens);
   const client = getClient(ref.provider);
@@ -64,9 +72,11 @@ async function callModel(ref: ModelRef, params: ChatCompleteParams): Promise<Cha
       })
     );
     await reconcileTokens(ref.provider, estimatedTokens, completion.usage?.total_tokens ?? estimatedTokens);
-    recordLatency(ref.provider, ref.model, Date.now() - startedAt).catch((err) =>
-      console.error(`[llm-router] failed to record latency for ${ref.provider}:${ref.model}`, err)
-    );
+    recordLatency(ref.provider, ref.model, Date.now() - startedAt).catch((err) => {
+      const message = `⚠ latency tracking failed for ${ref.provider}:${ref.model} (picker falls back to headroom-only ranking): ${(err as Error).message}`;
+      console.error(`[llm-router] ${message}`);
+      onWarning?.(message);
+    });
     return completion;
   } catch (err) {
     // The call never happened (or never finished), so free the reservation
@@ -152,7 +162,12 @@ export async function pickTaskAssignment(agentId: string): Promise<Assignment> {
  * rate-limited or down provider degrades to a different one instead of
  * blocking the agent.
  */
-export async function chatComplete(agentId: string, params: ChatCompleteParams, assignmentOverride?: Assignment): Promise<ChatCompletion> {
+export async function chatComplete(
+  agentId: string,
+  params: ChatCompleteParams,
+  assignmentOverride?: Assignment,
+  onWarning?: WarnFn
+): Promise<ChatCompletion> {
   const assignment = assignmentOverride ?? assignmentFor(agentId);
   const candidates = [assignment.primary, ...assignment.fallbacks].filter((ref) => isProviderConfigured(ref.provider));
 
@@ -165,7 +180,7 @@ export async function chatComplete(agentId: string, params: ChatCompleteParams, 
   let lastErr: unknown;
   for (const ref of candidates) {
     try {
-      const completion = await callModel(ref, params);
+      const completion = await callModel(ref, params, onWarning);
       await recordUsage(agentId, ref, completion);
       return completion;
     } catch (err) {
