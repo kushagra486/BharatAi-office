@@ -16,6 +16,28 @@ export interface Agent {
   home_y: number;
 }
 
+// One entry in the Automation panel's live cross-agent feed — built
+// client-side from the same 'agent-events' Realtime broadcast channel that
+// already feeds the employee side panel's per-agent terminal, not a
+// persisted table (see daemon/src/realtimeBroadcast.ts's comment for why).
+export interface ActivityFeedEntry {
+  id: string;
+  agentId: string;
+  taskId: string;
+  kind: 'output' | 'done' | 'failed';
+  text: string;
+  at: string;
+}
+
+// A file an agent has committed to the project's git repo, mirrored into
+// Supabase Storage (bucket "project-files") so the frontend can list and
+// download it without needing direct access to the worker's filesystem.
+export interface ProjectFile {
+  path: string; // "{agentId}/relative/path/in/that/agent's/workdir"
+  size: number;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   agent_id: string;
@@ -59,6 +81,11 @@ export interface BriefRecord {
   brief: string;
   etaMinutes: number | null;
   status: string;
+  // Identifies which project this is — the `brief` row is a singleton
+  // (id=1) that gets deleted and re-created fresh on each new project
+  // (see supabaseHive.clearProject/setBrief), so createdAt changing is how
+  // the worker notices a new project started and resets its local workdir.
+  createdAt: string;
 }
 
 export interface HiveSnapshot {

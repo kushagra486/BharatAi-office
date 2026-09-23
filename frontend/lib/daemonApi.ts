@@ -1,4 +1,4 @@
-import type { Agent, BriefRecord, Escalation, HiveMessage, LlmUsageByAgent, MemoryEntry, Task } from '@bharat-ai-office/shared';
+import type { Agent, BriefRecord, Escalation, HiveMessage, LlmUsageByAgent, MemoryEntry, ModelUsageStats, ProjectFile, Task } from '@bharat-ai-office/shared';
 import { clearToken, getToken } from './authToken';
 
 // Same-origin now — the API used to be a separate daemon process (a
@@ -73,6 +73,10 @@ export async function submitBrief(brief: string): Promise<void> {
   await postJson('/api/brief', { brief });
 }
 
+export async function abandonProject(): Promise<void> {
+  await request('/api/brief', { method: 'DELETE' });
+}
+
 export async function approveEscalation(id: number): Promise<Escalation> {
   return postJson<Escalation>(`/api/escalations/${id}/approve`);
 }
@@ -87,6 +91,11 @@ export async function searchMemory(query: string): Promise<MemoryEntry[]> {
 
 export async function getLlmUsage(): Promise<LlmUsageByAgent> {
   return request<LlmUsageByAgent>('/api/llm/usage');
+}
+
+/** Every (agent, provider, model) combination's own running token total — unlike getLlmUsage() above, this doesn't get relabeled when an agent switches models. */
+export async function getLlmUsageByModel(): Promise<ModelUsageStats[]> {
+  return request<ModelUsageStats[]>('/api/llm/usage-by-model');
 }
 
 // One-shot fetches for the initial state, used by useHiveSocket before its
@@ -109,4 +118,25 @@ export async function listEscalations(): Promise<Escalation[]> {
 
 export async function getBrief(): Promise<BriefRecord | null> {
   return request<BriefRecord | null>('/api/brief');
+}
+
+export async function listProjectFiles(): Promise<ProjectFile[]> {
+  return request<ProjectFile[]>('/api/files');
+}
+
+/** A signed URL good for 5 minutes — fetch fresh right before navigating to it, don't cache. */
+export async function getProjectFileDownloadUrl(path: string): Promise<string> {
+  const { url } = await request<{ url: string }>(`/api/files/download?path=${encodeURIComponent(path)}`);
+  return url;
+}
+
+/** The diff text a task's commit produced, or null if it never committed one (still running, failed early, or predates this feature). */
+export async function getTaskDiff(taskId: string): Promise<string | null> {
+  const { url } = await request<{ url: string | null }>(`/api/tasks/${encodeURIComponent(taskId)}/diff`);
+  if (!url) return null;
+  // The signed URL's signature is its own auth — a plain unauthenticated
+  // fetch to it is correct, same as the Files tab's download flow.
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  return res.text();
 }

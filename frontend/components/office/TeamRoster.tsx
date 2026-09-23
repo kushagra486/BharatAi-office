@@ -2,6 +2,7 @@ import type { Agent, LlmUsageByAgent, Task } from '@bharat-ai-office/shared';
 import { agentStatus, currentTaskFor, tasksByAgentMap } from '@/lib/agentStatus';
 import { jobDescriptionFor } from '@/lib/agentWork';
 import { formatTokenCount } from '@/lib/format';
+import { providerColorHex } from '@/lib/providerColor';
 import { useAnimatedNumber } from '@/hooks/useAnimatedNumber';
 import { useTokenHistory } from '@/hooks/useTokenHistory';
 import { AgentAvatar } from './AgentAvatar';
@@ -76,8 +77,23 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
         </div>
         {totalCalls > 0 && (
           <>
-            <div className="mt-1.5 font-mono text-[10px] tabular-nums text-[#6B7686]" title={Object.entries(byProvider).map(([p, t]) => `${p}: ${t.toLocaleString()} tok`).join(' · ')}>
+            <div className="mt-1.5 font-mono text-[10px] tabular-nums text-[#6B7686]">
               ⚡ {formatTokenCount(animatedTotalTokens)} tokens · {totalCalls} calls
+            </div>
+            {/* Visible provider/source breakdown — this used to be a hover-only tooltip on the line above, easy to miss entirely. */}
+            <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+              {Object.entries(byProvider)
+                .sort((a, b) => b[1] - a[1])
+                .map(([provider, tokens]) => (
+                  <span
+                    key={provider}
+                    className="flex items-center gap-1 font-mono text-[9px] lowercase tabular-nums text-[#6B7686]"
+                    title={`${provider}: ${tokens.toLocaleString()} tokens`}
+                  >
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: providerColorHex(provider) }} />
+                    {provider} {formatTokenCount(tokens)}
+                  </span>
+                ))}
             </div>
             <div className="mt-1.5">
               <TokenSparkline data={tokenHistory} />

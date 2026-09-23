@@ -23,6 +23,33 @@ import { executeToolCall, TOOL_SCHEMAS } from './tools';
 const MAX_TURNS = 25;
 const WALL_CLOCK_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
 
+// Just enough to render sensibly in a browser (preview/download) — not a
+// general-purpose mime database. Anything else falls back to
+// application/octet-stream, which still downloads fine either way.
+const CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.ts': 'text/plain',
+  '.tsx': 'text/plain',
+  '.jsx': 'text/plain',
+  '.json': 'application/json',
+  '.md': 'text/markdown',
+  '.txt': 'text/plain',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+};
+
+function guessContentType(filePath: string): string {
+  return CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
+
 export interface AgentOutputEvent {
   agentId: string;
   taskId: string;
@@ -109,6 +136,14 @@ class AgentRunner {
 
     this.emit(agentId, taskId, `[${agent.name}] starting task "${task.title}"`);
 
+    // Resolved once for the whole task (not re-picked per turn) — see
+    // pickTaskAssignment's own comment for why: keeps this task's
+    // tool-calling behavior consistent across all its turns. The next task
+    // (even for the same agent) re-picks fresh against then-current
+    // rate-limit headroom and latency.
+    const assignment = await llmRouter.pickTaskAssignment(agentId);
+    this.emit(agentId, taskId, `→ routed to ${assignment.primary.provider}:${assignment.primary.model} for this task`);
+
     let outcome: Outcome | null = null;
     // Self-Refine / Reflexion-lite (Madaan et al. 2023 / Shinn et al. 2023;
     // open, model-agnostic techniques): don't finalize on the *first*
@@ -120,6 +155,25 @@ class AgentRunner {
 
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       if (state.cancelled) return;
+
+      // Real cross-process cancel signal: kill() only covers an in-process
+      // caller (nothing calls it yet), but the frontend's "Abandon project"
+      // button cancels by deleting the task row directly from Postgres —
+      // the only channel this worker and the frontend's serverless routes
+      // share. Checked once per turn (not mid-tool-call) so a run in
+      // progress finishes its current tool call cleanly instead of leaving
+      // a half-applied edit.
+      const liveTask = await hive.getTask(taskId);
+      if (!liveTask || liveTask.status !== 'working') {
+        this.emit(
+          agentId,
+          taskId,
+          `[${agent.name}] stopping — task ${liveTask ? `status changed to "${liveTask.status}"` : 'no longer exists'} externally`
+        );
+        this.running.delete(agentId);
+        return;
+      }
+
       if (Date.now() - startedAt > WALL_CLOCK_LIMIT_MS) {
         outcome = { kind: 'failed', reason: 'exceeded the 10-minute time limit without finishing' };
         break;
@@ -127,7 +181,7 @@ class AgentRunner {
 
       let completion;
       try {
-        completion = await llmRouter.chatComplete(agentId, { messages, tools: TOOL_SCHEMAS });
+        completion = await llmRouter.chatComplete(agentId, { messages, tools: TOOL_SCHEMAS }, assignment, (msg) => this.emit(agentId, taskId, msg));
       } catch (err) {
         outcome = { kind: 'failed', reason: `LLM call failed: ${(err as Error).message}` };
         break;
@@ -188,29 +242,60 @@ class AgentRunner {
     await this.finish(agentId, taskId, outcome ?? { kind: 'failed', reason: `did not finish within ${MAX_TURNS} turns` });
   }
 
+  private async uploadChangedFiles(changedFiles: string[]): Promise<void> {
+    // Mirrors just what this commit touched into Supabase Storage for the
+    // frontend's Files tab. Uploads are independent — one bad file (unlikely,
+    // but binary/permissions edge cases exist) shouldn't drop the rest.
+    for (const relPath of changedFiles) {
+      try {
+        const absPath = path.join(env.PROJECT_WORKDIR, relPath);
+        if (!fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) continue; // deleted or a directory entry
+        const content = fs.readFileSync(absPath);
+        await hive.uploadProjectFile(relPath, content, guessContentType(relPath));
+      } catch (err) {
+        console.error(`[agent-runner] failed to upload "${relPath}" to project-files storage`, err);
+      }
+    }
+  }
+
   private async finish(agentId: string, taskId: string, outcome: Outcome): Promise<void> {
     if (outcome.kind === 'done') {
       try {
-        await commitAgentWork(agentId, `${agentId}: ${outcome.summary}`.slice(0, 200));
+        const { changedFiles, diff } = await commitAgentWork(agentId, `${agentId}: ${outcome.summary}`.slice(0, 200));
+        if (changedFiles.length > 0) await this.uploadChangedFiles(changedFiles);
+        if (diff) await hive.uploadTaskDiff(taskId, diff);
       } catch (err) {
         console.error(`[agent-runner] commit failed for ${agentId}`, err);
       }
-      await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'report', body: outcome.summary });
-      await hive.updateTaskStatus(taskId, 'done');
+      // The task row can vanish between the last per-turn liveness check and
+      // here (e.g. "Abandon project" deleting it mid-final-turn) — a failed
+      // update here must not become an unhandled rejection, which would
+      // crash the whole worker process and take every other agent's
+      // in-flight run down with it.
+      try {
+        await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'report', body: outcome.summary });
+        await hive.updateTaskStatus(taskId, 'done');
+      } catch (err) {
+        console.error(`[agent-runner] failed to record completion for ${agentId}/${taskId} (task may have been deleted)`, err);
+      }
       agentEvents.emit('exit', { agentId, taskId, exitCode: 0 } satisfies AgentExitEvent);
       void publishAgentEvent('exit', { agentId, taskId, exitCode: 0 });
       return;
     }
 
-    await hive.updateTaskStatus(taskId, 'blocked');
-    if (outcome.kind === 'escalate') {
-      // Sent to Nova for policy triage — an employee flagging something
-      // doesn't automatically belong on the human's Approvals Dock.
-      await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'escalation', body: outcome.reason });
-    } else {
-      // A worker-detected operational failure, not a policy judgment call —
-      // goes straight to the human.
-      await hive.raiseEscalation({ agentId, description: `Task "${taskId}" ${outcome.reason}. Needs review.` });
+    try {
+      await hive.updateTaskStatus(taskId, 'blocked');
+      if (outcome.kind === 'escalate') {
+        // Sent to Nova for policy triage — an employee flagging something
+        // doesn't automatically belong on the human's Approvals Dock.
+        await hive.sendMessage({ fromAgent: agentId, toAgent: 'nova', type: 'escalation', body: outcome.reason });
+      } else {
+        // A worker-detected operational failure, not a policy judgment call —
+        // goes straight to the human.
+        await hive.raiseEscalation({ agentId, description: `Task "${taskId}" ${outcome.reason}. Needs review.` });
+      }
+    } catch (err) {
+      console.error(`[agent-runner] failed to record ${outcome.kind} for ${agentId}/${taskId} (task may have been deleted)`, err);
     }
     agentEvents.emit('exit', { agentId, taskId, exitCode: 1 } satisfies AgentExitEvent);
     void publishAgentEvent('exit', { agentId, taskId, exitCode: 1 });

@@ -2,22 +2,29 @@
 
 import { useHiveSocket } from '@/hooks/useHiveSocket';
 import { useLlmUsage } from '@/hooks/useLlmUsage';
+import { useModelUsage } from '@/hooks/useModelUsage';
+import { useProjectFiles } from '@/hooks/useProjectFiles';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { HudBar } from '@/components/office/HudBar';
 import { DashboardStatTiles } from '@/components/dashboard/DashboardStatTiles';
 import { MeetingSummaryBoard } from '@/components/dashboard/MeetingSummaryBoard';
 import { WorkingProjectsPanel } from '@/components/dashboard/WorkingProjectsPanel';
+import { ProjectFilesPanel } from '@/components/dashboard/ProjectFilesPanel';
+import { AutomationPanel } from '@/components/dashboard/AutomationPanel';
 import { AgentsWorkGraph } from '@/components/dashboard/AgentsWorkGraph';
 import { BestWorkerCard } from '@/components/dashboard/BestWorkerCard';
 import { AgentMeshGraph } from '@/components/dashboard/AgentMeshGraph';
 import { AgentRosterGrid } from '@/components/dashboard/AgentRosterGrid';
+import { ModelUsagePanel } from '@/components/dashboard/ModelUsagePanel';
 
 const SESSION_ID = 'OFFICE-001';
 
 export default function DashboardPage() {
   const { ready } = useAuthGuard();
-  const { connected, agents, tasks, messages, brief } = useHiveSocket();
+  const { connected, agents, tasks, messages, brief, activityFeed } = useHiveSocket();
   const usage = useLlmUsage();
+  const modelUsage = useModelUsage();
+  const files = useProjectFiles();
 
   if (!ready) return null;
 
@@ -41,6 +48,12 @@ export default function DashboardPage() {
           </div>
           <BestWorkerCard agents={agents} tasks={tasks} usage={usage} />
         </div>
+
+        <ProjectFilesPanel files={files} />
+
+        <AutomationPanel agents={agents} tasks={tasks} activityFeed={activityFeed} />
+
+        <ModelUsagePanel usage={modelUsage} />
 
         <AgentMeshGraph agents={agents} messages={messages} />
 

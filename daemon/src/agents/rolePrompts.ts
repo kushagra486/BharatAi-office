@@ -18,7 +18,13 @@ import { ROLE_SCOPE } from '@bharat-ai-office/shared';
 const REASONING_SCAFFOLD = `Before each tool call, briefly state what you're about to do and why in
 one line (a "Thought"), then make the call (the "Action"). After a tool
 result comes back (the "Observation"), use it to decide your next Thought.
-This keeps you from guessing — plan the step, then take it.`;
+This keeps you from guessing — plan the step, then take it.
+
+Keep every Thought to one short sentence, and keep your mark_task_done
+summary to 1-2 sentences. The files and code you produce are the
+deliverable, not narration about them — don't restate what a tool result
+already showed, and don't explain a decision at length when a plain
+statement of it is enough.`;
 
 export function buildRolePrompt(agent: Agent, agentWorkdir: string): string {
   const scope = ROLE_SCOPE[agent.id] ?? 'Stay strictly within your assigned responsibilities.';

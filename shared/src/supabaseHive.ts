@@ -7,6 +7,7 @@ import type {
   HiveMessage,
   MemoryEntry,
   MessageType,
+  ProjectFile,
   Task,
   TaskStatus,
 } from './hive-types';
@@ -223,10 +224,11 @@ interface BriefRow {
   brief: string;
   eta_minutes: number | null;
   status: string;
+  created_at: string;
 }
 
 function rowToBrief(row: BriefRow): BriefRecord {
-  return { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status };
+  return { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status, createdAt: row.created_at };
 }
 
 export async function setBrief(input: { brief: string; etaMinutes?: number | null; status?: string }): Promise<BriefRecord> {
@@ -237,14 +239,142 @@ export async function setBrief(input: { brief: string; etaMinutes?: number | nul
         { id: 1, brief: input.brief, eta_minutes: input.etaMinutes ?? null, status: input.status ?? 'planning', updated_at: new Date().toISOString() },
         { onConflict: 'id' }
       )
-      .select('brief, eta_minutes, status')
+      .select('brief, eta_minutes, status, created_at')
       .single()
   );
   return rowToBrief(row);
 }
 
 export async function getBrief(): Promise<BriefRecord | undefined> {
-  const { data, error } = await db().from('brief').select('brief, eta_minutes, status').eq('id', 1).maybeSingle();
+  const { data, error } = await db().from('brief').select('brief, eta_minutes, status, created_at').eq('id', 1).maybeSingle();
   if (error) throw new Error(error.message);
   return data ? rowToBrief(data as BriefRow) : undefined;
+}
+
+/**
+ * Abandons the current project: clears its tasks, mailbox messages, and the
+ * brief row itself, so the Brief Strip's composer reopens immediately. Any
+ * task still `working` belongs to an in-flight AgentRunner loop on the
+ * persistent worker that this can't reach — deleting its row here just
+ * means the worker's eventual `updateTaskStatus`/`sendMessage` call for it
+ * fails silently against a missing row, which is fine (its result is
+ * simply discarded).
+ */
+export async function clearProject(): Promise<void> {
+  const { error: messagesError } = await db().from('messages').delete().neq('id', 0);
+  if (messagesError) throw new Error(messagesError.message);
+  const { error: tasksError } = await db().from('tasks').delete().neq('id', '');
+  if (tasksError) throw new Error(tasksError.message);
+  const { error: briefError } = await db().from('brief').delete().eq('id', 1);
+  if (briefError) throw new Error(briefError.message);
+  // Best-effort: an abandoned project's downloadable files shouldn't linger
+  // for the next one, but a Storage hiccup here shouldn't block the
+  // composer from reopening — the DB rows above are what actually matters.
+  try {
+    await clearProjectFiles();
+  } catch (err) {
+    console.error('[supabaseHive] failed to clear project-files storage during abandon', err);
+  }
+  try {
+    await clearTaskDiffs();
+  } catch (err) {
+    console.error('[supabaseHive] failed to clear project-diffs storage during abandon', err);
+  }
+}
+
+// --- project files (Supabase Storage) ---------------------------------------
+//
+// Mirrors each agent's committed work into Storage so the frontend's Files
+// tab can list/download without touching the worker's filesystem directly
+// (the worker has no HTTP server — see daemon/src/index.ts). Uploaded by
+// AgentRunner right after a successful git commit, keyed by the same
+// "{agentId}/relative/path" the commit touched.
+
+const PROJECT_FILES_BUCKET = 'project-files';
+
+export async function uploadProjectFile(path: string, content: Uint8Array, contentType?: string): Promise<void> {
+  const { error } = await db()
+    .storage.from(PROJECT_FILES_BUCKET)
+    .upload(path, content, { contentType: contentType ?? 'application/octet-stream', upsert: true });
+  if (error) throw new Error(error.message);
+}
+
+// Storage .list() only returns one directory level at a time. Uploaded paths
+// are always exactly "{agentId}/{relativePath}", so one call for the
+// top-level (agent id folders) plus one nested call per folder covers every
+// file — this deliberately doesn't recurse further, since agent workdirs
+// are small single-project deliverables (a handful of files/assets), not
+// deep source trees.
+export async function listProjectFiles(): Promise<ProjectFile[]> {
+  const storage = db().storage.from(PROJECT_FILES_BUCKET);
+  const { data: topLevel, error } = await storage.list('', { limit: 1000 });
+  if (error) throw new Error(error.message);
+
+  const files: ProjectFile[] = [];
+  for (const entry of topLevel ?? []) {
+    if (entry.id !== null) continue; // a stray top-level file, not an agent folder — ignore
+    const { data: nested, error: nestedError } = await storage.list(entry.name, { limit: 1000 });
+    if (nestedError) throw new Error(nestedError.message);
+    for (const file of nested ?? []) {
+      if (file.id === null) continue; // a subfolder one level deeper — not supported, skip
+      files.push({
+        path: `${entry.name}/${file.name}`,
+        size: (file.metadata?.size as number | undefined) ?? 0,
+        updatedAt: file.updated_at ?? file.created_at ?? '',
+      });
+    }
+  }
+  return files;
+}
+
+/** A short-lived signed URL — the bucket is private, so this is the only way to fetch a file's content. */
+export async function getProjectFileDownloadUrl(path: string): Promise<string> {
+  const { data, error } = await db().storage.from(PROJECT_FILES_BUCKET).createSignedUrl(path, 300);
+  if (error) throw new Error(error.message);
+  return data.signedUrl;
+}
+
+export async function clearProjectFiles(): Promise<void> {
+  const files = await listProjectFiles();
+  if (files.length === 0) return;
+  const { error } = await db()
+    .storage.from(PROJECT_FILES_BUCKET)
+    .remove(files.map((f) => f.path));
+  if (error) throw new Error(error.message);
+}
+
+// --- task diffs (Supabase Storage) -------------------------------------------
+//
+// A separate bucket from project-files (not folded into it) — a diff isn't
+// a deliverable, it's an audit/preview artifact, and project-files' listing
+// logic treats every top-level folder as an agent id, which a "diffs"
+// folder would falsely masquerade as. Keyed by taskId, not agentId, since
+// that's what the Automation panel looks it up by (a task -> what changed
+// to finish it).
+
+const PROJECT_DIFFS_BUCKET = 'project-diffs';
+
+export async function uploadTaskDiff(taskId: string, diff: string): Promise<void> {
+  if (!diff.trim()) return; // nothing changed (shouldn't normally happen for a 'done' outcome, but not worth erroring over)
+  const { error } = await db()
+    .storage.from(PROJECT_DIFFS_BUCKET)
+    .upload(`${taskId}.diff`, diff, { contentType: 'text/plain', upsert: true });
+  if (error) throw new Error(error.message);
+}
+
+/** A short-lived signed URL for a task's diff text, or undefined if this task has none (still running, failed before committing, or predates this feature). */
+export async function getTaskDiffUrl(taskId: string): Promise<string | undefined> {
+  const { data, error } = await db().storage.from(PROJECT_DIFFS_BUCKET).createSignedUrl(`${taskId}.diff`, 300);
+  if (error) return undefined; // object not found is the expected case, not a real error
+  return data.signedUrl;
+}
+
+export async function clearTaskDiffs(): Promise<void> {
+  const { data, error } = await db().storage.from(PROJECT_DIFFS_BUCKET).list('', { limit: 1000 });
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) return;
+  const { error: removeError } = await db()
+    .storage.from(PROJECT_DIFFS_BUCKET)
+    .remove(data.map((f) => f.name));
+  if (removeError) throw new Error(removeError.message);
 }

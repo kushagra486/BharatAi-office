@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Agent, Escalation, HiveMessage, Task } from '@bharat-ai-office/shared';
+import type { ActivityFeedEntry, Agent, BriefRecord, Escalation, HiveMessage, Task } from '@bharat-ai-office/shared';
 import { getAuthStatus, getBrief, listAgents, listEscalations, listMessages, listTasks } from '@/lib/daemonApi';
 import { getToken } from '@/lib/authToken';
 import { getSupabaseClient } from '@/lib/supabaseClient';
@@ -12,12 +12,17 @@ export interface HiveSocketState {
   tasks: Task[];
   messages: HiveMessage[];
   escalations: Escalation[];
-  brief: { brief: string; etaMinutes: number | null; status: string } | null;
+  brief: BriefRecord | null;
   // Per-agent accumulated terminal output, capped, for the employee side panel.
   agentOutputByAgent: Record<string, string>;
+  // Cross-agent chronological feed (newest first) for the Automation panel —
+  // built from the same broadcast events as agentOutputByAgent above, just
+  // kept as a flat capped list instead of per-agent accumulation.
+  activityFeed: ActivityFeedEntry[];
 }
 
 const TERMINAL_BUFFER_CAP = 20_000;
+const ACTIVITY_FEED_CAP = 200;
 
 const initialState: HiveSocketState = {
   connected: false,
@@ -27,7 +32,14 @@ const initialState: HiveSocketState = {
   escalations: [],
   brief: null,
   agentOutputByAgent: {},
+  activityFeed: [],
 };
+
+let feedEntrySeq = 0;
+function nextFeedEntryId(): string {
+  feedEntrySeq += 1;
+  return `${Date.now()}-${feedEntrySeq}`;
+}
 
 /**
  * Keeps agent/task/message/escalation/brief state in sync with Supabase —
@@ -95,15 +107,37 @@ export function useHiveSocket(): HiveSocketState {
         }));
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'brief' }, (payload) => {
-        const row = payload.new as { brief: string; eta_minutes: number | null; status: string };
-        setState((prev) => ({ ...prev, brief: { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status } }));
+        const row = payload.new as { brief: string; eta_minutes: number | null; status: string; created_at: string };
+        setState((prev) => ({
+          ...prev,
+          brief: { brief: row.brief, etaMinutes: row.eta_minutes, status: row.status, createdAt: row.created_at },
+        }));
       })
       .on('broadcast', { event: 'output' }, ({ payload }) => {
-        const { agentId, chunk } = payload as { agentId: string; taskId: string; chunk: string };
+        const { agentId, taskId, chunk } = payload as { agentId: string; taskId: string; chunk: string };
         setState((prev) => {
           const existing = prev.agentOutputByAgent[agentId] ?? '';
           const next = (existing + chunk).slice(-TERMINAL_BUFFER_CAP);
-          return { ...prev, agentOutputByAgent: { ...prev.agentOutputByAgent, [agentId]: next } };
+          const entry: ActivityFeedEntry = { id: nextFeedEntryId(), agentId, taskId, kind: 'output', text: chunk.trim(), at: new Date().toISOString() };
+          return {
+            ...prev,
+            agentOutputByAgent: { ...prev.agentOutputByAgent, [agentId]: next },
+            activityFeed: [entry, ...prev.activityFeed].slice(0, ACTIVITY_FEED_CAP),
+          };
+        });
+      })
+      .on('broadcast', { event: 'exit' }, ({ payload }) => {
+        const { agentId, taskId, exitCode } = payload as { agentId: string; taskId: string; exitCode: number };
+        setState((prev) => {
+          const entry: ActivityFeedEntry = {
+            id: nextFeedEntryId(),
+            agentId,
+            taskId,
+            kind: exitCode === 0 ? 'done' : 'failed',
+            text: exitCode === 0 ? 'finished the task' : 'stopped — blocked, escalated, or failed',
+            at: new Date().toISOString(),
+          };
+          return { ...prev, activityFeed: [entry, ...prev.activityFeed].slice(0, ACTIVITY_FEED_CAP) };
         });
       })
       .subscribe((subStatus) => {

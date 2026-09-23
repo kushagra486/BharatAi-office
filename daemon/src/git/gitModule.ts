@@ -47,15 +47,30 @@ export async function ensureRepo(): Promise<void> {
   });
 }
 
-export async function commitAgentWork(agentId: string, message: string): Promise<{ committed: boolean }> {
+export async function commitAgentWork(
+  agentId: string,
+  message: string
+): Promise<{ committed: boolean; changedFiles: string[]; diff: string }> {
   return enqueue(async () => {
     await run(['add', agentId]);
     const { stdout } = await run(['status', '--porcelain', '--', agentId]);
     if (!stdout.trim()) {
-      return { committed: false };
+      return { committed: false, changedFiles: [], diff: '' };
     }
     await run(['commit', '-m', message]);
-    return { committed: true };
+    // Repo-root-relative paths (so already "{agentId}/relative/path"), used
+    // by AgentRunner to mirror just what changed into Supabase Storage
+    // instead of re-uploading the agent's whole workdir on every commit.
+    const { stdout: diffOutput } = await run(['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD']);
+    const changedFiles = diffOutput
+      .split('\n')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    // The unified patch text for the commit — powers the Automation panel's
+    // diff preview so a human can see exactly what an agent changed without
+    // downloading every file individually.
+    const { stdout: diff } = await run(['diff-tree', '-p', '--no-color', '-r', 'HEAD']);
+    return { committed: true, changedFiles, diff };
   });
 }
 
@@ -63,5 +78,20 @@ export async function repoStatus(): Promise<string> {
   return enqueue(async () => {
     const { stdout } = await run(['status', '--porcelain']);
     return stdout;
+  });
+}
+
+/**
+ * Wipes every agent's workdir + the local git repo and starts fresh — used
+ * when dispatch.ts notices a new project has started (the `brief` row's
+ * created_at changed) so the previous project's files don't leak into it.
+ * Enqueued like every other git op here so it can't race a commit that's
+ * still in flight for the project that's being cleared out.
+ */
+export async function resetWorkdir(): Promise<void> {
+  return enqueue(async () => {
+    if (fs.existsSync(env.PROJECT_WORKDIR)) {
+      fs.rmSync(env.PROJECT_WORKDIR, { recursive: true, force: true });
+    }
   });
 }

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { BriefRecord } from '@bharat-ai-office/shared';
 
 export interface BriefStripProps {
   brief: BriefRecord | null;
   onSubmitBrief: (text: string) => Promise<void>;
+  onAbandonProject: () => Promise<void>;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -14,12 +15,38 @@ const STATUS_LABEL: Record<string, string> = {
   complete: 'Shipped',
 };
 
-export function BriefStrip({ brief, onSubmitBrief }: BriefStripProps) {
+export function BriefStrip({ brief, onSubmitBrief, onAbandonProject }: BriefStripProps) {
   const [draft, setDraft] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingAbandon, setConfirmingAbandon] = useState(false);
+  const [abandoning, setAbandoning] = useState(false);
 
   const showComposer = !brief || brief.status === 'complete';
+
+  // A second click within 4s confirms; otherwise the confirm state quietly
+  // expires so an accidental first click doesn't leave a live "abandon"
+  // trap armed indefinitely.
+  useEffect(() => {
+    if (!confirmingAbandon) return;
+    const timer = setTimeout(() => setConfirmingAbandon(false), 4000);
+    return () => clearTimeout(timer);
+  }, [confirmingAbandon]);
+
+  async function handleAbandon() {
+    if (!confirmingAbandon) {
+      setConfirmingAbandon(true);
+      return;
+    }
+    setAbandoning(true);
+    try {
+      await onAbandonProject();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to abandon project.');
+      setAbandoning(false);
+      setConfirmingAbandon(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -67,6 +94,24 @@ export function BriefStrip({ brief, onSubmitBrief }: BriefStripProps) {
       </span>
       <p className="flex-1 truncate text-[#E6EDF3]">{brief!.brief}</p>
       {brief!.etaMinutes != null && <span className="shrink-0 text-[#6B7686]">ETA ~{brief!.etaMinutes}m</span>}
+      {error && <span className="shrink-0 text-magenta">{error}</span>}
+      <button
+        type="button"
+        onClick={handleAbandon}
+        disabled={abandoning}
+        title={
+          confirmingAbandon
+            ? 'Click again to permanently abandon this project'
+            : 'Abandon this project and start a new one'
+        }
+        className={`shrink-0 rounded border px-3 py-1 uppercase tracking-wide transition-colors disabled:opacity-40 ${
+          confirmingAbandon
+            ? 'border-magenta/60 text-magenta hover:bg-magenta/10'
+            : 'border-line text-[#6B7686] hover:border-magenta/50 hover:text-magenta'
+        }`}
+      >
+        {abandoning ? 'Abandoning…' : confirmingAbandon ? 'Click to confirm' : 'Abandon project'}
+      </button>
     </div>
   );
 }

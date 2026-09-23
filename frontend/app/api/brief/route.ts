@@ -24,3 +24,14 @@ export async function POST(request: Request) {
   const tasks = await nova.decomposeBrief(brief);
   return NextResponse.json({ taskCount: tasks.length, tasks });
 }
+
+// Abandons the current project so the Brief Strip's composer reopens —
+// the only way to recover from a project stuck with no escalation raised
+// (or to simply start over) before this route existed.
+export async function DELETE(request: Request) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
+
+  await supabaseHive.clearProject();
+  return jsonNoStore({ ok: true });
+}
