@@ -1,5 +1,5 @@
 import type { ChatCompletion, ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-import type { LlmUsageByAgent, LlmUsageStats } from '../llm-types';
+import type { LlmUsageByAgent, LlmUsageStats, ModelUsageStats } from '../llm-types';
 import { AGENT_TIER, TIER_POOLS, assignmentFor, type Assignment, type ModelRef } from './assignments';
 import { getClient, isProviderConfigured } from './providers';
 import { acquireSlot, getHeadroomFraction, reconcileTokens, withRetry } from './rateLimiter';
@@ -10,7 +10,17 @@ export interface ChatCompleteParams {
   tools?: ChatCompletionTool[];
   responseFormatJson?: boolean;
   temperature?: number;
+  maxTokens?: number;
 }
+
+// A cap, not a target — generous enough that a real file-write tool call
+// (which can carry a whole file's contents as a JSON argument) never gets
+// truncated mid-write, but tight enough to bound the worst case: a
+// reasoning model rambling for thousands of tokens before it ever calls a
+// tool. Bounding that worst case is what actually shortens wall-clock time
+// per turn, not shrinking normal responses (that's rolePrompts.ts's job —
+// see REASONING_SCAFFOLD's concision guidance).
+const DEFAULT_MAX_TOKENS = 4096;
 
 // Usage now lives in the `llm_usage` table (record_llm_usage does an
 // atomic upsert-with-increment) instead of an in-memory Map — Nova's calls
@@ -68,6 +78,7 @@ async function callModel(ref: ModelRef, params: ChatCompleteParams, onWarning?: 
         messages: params.messages,
         tools: params.tools,
         temperature: params.temperature ?? 0.2,
+        max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
         ...(params.responseFormatJson ? { response_format: { type: 'json_object' as const } } : {}),
       })
     );
@@ -222,4 +233,20 @@ export async function getUsage(): Promise<LlmUsageByAgent> {
     } satisfies LlmUsageStats;
   }
   return result;
+}
+
+/** Every (agent, provider, model) combination ever called, each with its own real running total — see llm_usage_by_model's migration comment for why this exists separately from getUsage() above. */
+export async function getUsageByModel(): Promise<ModelUsageStats[]> {
+  const { data, error } = await db().from('llm_usage_by_model').select('*').order('approx_tokens', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(
+    (row): ModelUsageStats => ({
+      agentId: row.agent_id,
+      provider: row.provider,
+      model: row.model,
+      calls: row.calls,
+      approxTokens: row.approx_tokens,
+      lastCallAt: row.last_call_at,
+    })
+  );
 }

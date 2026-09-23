@@ -1,4 +1,4 @@
-import type { Agent, BriefRecord, Escalation, HiveMessage, LlmUsageByAgent, MemoryEntry, ProjectFile, Task } from '@bharat-ai-office/shared';
+import type { Agent, BriefRecord, Escalation, HiveMessage, LlmUsageByAgent, MemoryEntry, ModelUsageStats, ProjectFile, Task } from '@bharat-ai-office/shared';
 import { clearToken, getToken } from './authToken';
 
 // Same-origin now — the API used to be a separate daemon process (a
@@ -91,6 +91,11 @@ export async function searchMemory(query: string): Promise<MemoryEntry[]> {
 
 export async function getLlmUsage(): Promise<LlmUsageByAgent> {
   return request<LlmUsageByAgent>('/api/llm/usage');
+}
+
+/** Every (agent, provider, model) combination's own running token total — unlike getLlmUsage() above, this doesn't get relabeled when an agent switches models. */
+export async function getLlmUsageByModel(): Promise<ModelUsageStats[]> {
+  return request<ModelUsageStats[]>('/api/llm/usage-by-model');
 }
 
 // One-shot fetches for the initial state, used by useHiveSocket before its

@@ -9,3 +9,17 @@ export interface LlmUsageStats {
 }
 
 export type LlmUsageByAgent = Record<string, LlmUsageStats>;
+
+// One row per (agent, provider, model) combination that's ever been
+// called, from the llm_usage_by_model table — unlike LlmUsageByAgent
+// (one row per agent, overwritten whenever that agent's model changes),
+// this keeps every model's own running total intact even as agents move
+// between models under dynamic routing.
+export interface ModelUsageStats {
+  agentId: string;
+  provider: string;
+  model: string;
+  calls: number;
+  approxTokens: number;
+  lastCallAt: string;
+}

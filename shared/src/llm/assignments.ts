@@ -204,13 +204,23 @@ export const AGENT_TIER: Partial<Record<string, Tier>> = {
 // failed it — wrote prose describing a fake tool call instead of a real
 // one — and openrouter:qwen/qwen3-coder:free no longer exists under this
 // account's key, so neither is here despite looking good on paper.
+// Ordered fastest-first within each tier — this is the tie-break order
+// pickTaskAssignment falls back to while every candidate still shares the
+// same cold-start latency default (model_latency_stats has no real samples
+// yet), so it's the ordering actually in effect today, not just cosmetic.
+// Groq's LPU hardware is well-established as the fastest inference of any
+// provider here; models with "flash"/lighter naming are their provider's
+// own speed-optimized variant; the two big general models and the
+// HF-router-hosted one (shared third-party infra, least predictable
+// latency) sort last. Once real latency samples accumulate, observed data
+// overrides this ordering automatically.
 export const TIER_POOLS: Record<Tier, ModelRef[]> = {
   code: [
-    { provider: 'nvidia', model: 'z-ai/glm-5.3' },
     { provider: 'groq', model: 'openai/gpt-oss-120b' },
-    { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
-    { provider: 'nvidia', model: 'z-ai/glm-5.3-flash' },
     { provider: 'gemini', model: 'gemini-flash-latest' },
+    { provider: 'nvidia', model: 'z-ai/glm-5.3-flash' },
+    { provider: 'nvidia', model: 'z-ai/glm-5.3' },
+    { provider: 'openrouter', model: 'nvidia/nemotron-3-super-120b-a12b:free' },
     { provider: 'huggingface', model: 'deepseek-ai/DeepSeek-V3.1' },
   ],
   light: [

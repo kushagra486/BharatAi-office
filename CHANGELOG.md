@@ -5,6 +5,26 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- Speed/brevity pass: capped every LLM call at 4096 output tokens (generous
+  enough not to truncate a real file-write tool call, tight enough to bound
+  a reasoning model rambling for thousands of tokens before it ever acts —
+  that's what actually costs wall-clock time per turn) and added explicit
+  concision guidance to every agent's system prompt (one-sentence Thoughts,
+  1-2 sentence completion summaries — the code is the deliverable, not
+  narration about it). Also reordered the "code" tier pool fastest-first
+  (Groq's hardware, then each provider's own speed-optimized "flash"
+  variant, then the larger/shared-infra models last) — this is the actual
+  tie-break order in effect today, since every candidate still shares the
+  same cold-start latency default until real samples accumulate.
+- Fixed a real gap in token accounting: `llm_usage` is keyed by agent alone,
+  so switching an agent's model (routine now under dynamic routing)
+  silently relabeled that agent's entire historical token count onto
+  whichever model became current — it could never actually answer "how
+  many tokens has model X used." Added `llm_usage_by_model`, keyed by
+  (agent, provider, model), so every model keeps its own real running
+  total; `record_llm_usage` now updates both tables atomically. New
+  dashboard panel shows the breakdown per model, not just per provider.
+
 - Added Gemini and Hugging Face as 4th/5th LLM providers (via Google's
   OpenAI-compatibility shim and Hugging Face's Inference Providers router
   respectively — not the `transformers` Python library, which runs models
