@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useClock } from '@/hooks/useClock';
 import { getToken } from '@/lib/authToken';
 import { logout } from '@/lib/daemonApi';
+import { Button } from '@/components/ui/Button';
 
 export interface HudBarProps {
   sessionId: string;
@@ -26,15 +27,15 @@ const NAV_LINKS = [
 function SiteNav() {
   const pathname = usePathname();
   return (
-    <nav className="hidden items-center gap-1 sm:flex">
+    <nav className="hidden items-center gap-0.5 rounded-full border border-line/60 bg-surface/60 p-0.5 sm:flex">
       {NAV_LINKS.map((link) => {
         const active = pathname === link.href;
         return (
           <Link
             key={link.href}
             href={link.href}
-            className={`rounded px-2 py-1 font-mono text-[11px] uppercase tracking-wide transition-colors ${
-              active ? 'bg-line/60 text-[#E6EDF3]' : 'text-[#6B7686] hover:text-[#E6EDF3]'
+            className={`rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              active ? 'bg-violet/15 text-violet' : 'text-ink-faint hover:text-ink'
             }`}
           >
             {link.label}
@@ -54,13 +55,9 @@ function LogoutButton() {
   if (!hasToken) return null;
 
   return (
-    <button
-      type="button"
-      onClick={() => logout().finally(() => (window.location.href = '/login'))}
-      className="rounded border border-line px-2.5 py-1.5 uppercase tracking-wide text-[#6B7686] transition-all duration-200 hover:border-magenta hover:text-magenta active:scale-95 sm:px-2 sm:py-1"
-    >
+    <Button variant="ghost" tone="magenta" size="sm" onClick={() => logout().finally(() => (window.location.href = '/login'))}>
       Logout
-    </button>
+    </Button>
   );
 }
 
@@ -82,8 +79,8 @@ function MobileNav() {
           <Link
             key={link.href}
             href={link.href}
-            className={`flex-1 py-2.5 text-center font-mono text-[11px] uppercase tracking-wide transition-colors ${
-              active ? 'bg-line/60 text-[#E6EDF3]' : 'text-[#6B7686] active:bg-line/30'
+            className={`min-h-11 flex-1 py-2.5 text-center text-[13px] font-medium transition-colors ${
+              active ? 'bg-violet/10 text-violet' : 'text-ink-faint active:bg-line/30'
             }`}
           >
             {link.label}
@@ -106,25 +103,23 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
           backgroundImage: 'linear-gradient(90deg, transparent, #2FE6D2, #8B7CF6, #FFB454, transparent)',
         }}
       />
-      <div className="flex items-center justify-between px-4 py-2">
+      <div className="flex items-center justify-between px-4 py-2.5">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           {/* Restrained Bharat accent (PRD 7.1): saffron/india-green on brand chrome only. */}
           <span className="h-2 w-2 rounded-full bg-saffron" />
-          <span className="h-2 w-2 rounded-full bg-[#E6EDF3]" />
+          <span className="h-2 w-2 rounded-full bg-ink" />
           <span className="h-2 w-2 rounded-full bg-india-green" />
-          <span className="ml-1 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[#E6EDF3]">
-            Bharat AI Office
-          </span>
+          <span className="ml-1 text-[13px] font-semibold tracking-tight text-ink">Bharat AI Office</span>
         </div>
 
         <div className="hidden h-4 w-px bg-line sm:block" />
 
-        <div className="hidden items-center gap-2 font-mono text-[11px] text-[#6B7686] sm:flex">
-          <span className="rounded border border-line px-2 py-1 tabular-nums">
+        <div className="hidden items-center gap-2 font-mono text-[11px] text-ink-faint sm:flex">
+          <span className="rounded-lg border border-line px-2 py-1 tabular-nums">
             {now ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
           </span>
-          <span className="rounded border border-line px-2 py-1">
+          <span className="rounded-lg border border-line px-2 py-1">
             {now ? now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
           </span>
         </div>
@@ -133,31 +128,30 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
         <SiteNav />
       </div>
 
-      <div className="flex items-center gap-3 font-mono text-[11px] text-[#6B7686]">
-        <span className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="flex items-center gap-1.5 font-mono text-[11px] text-ink-faint" title={sessionId}>
           <span
             className={`h-1.5 w-1.5 rounded-full transition-colors ${
               connected ? 'bg-green text-green animate-glow-pulse' : 'bg-magenta'
             }`}
           />
-          {sessionId}
+          <span className="hidden sm:inline">{sessionId}</span>
         </span>
         {onOpenRecall && (
-          <button
-            type="button"
-            onClick={onOpenRecall}
-            className="rounded border border-line px-2.5 py-1.5 uppercase tracking-wide text-cyan transition-all duration-200 hover:scale-105 hover:border-cyan hover:shadow-[0_0_10px_-2px_#2FE6D2] active:scale-95 sm:px-2 sm:py-1"
-          >
-            ⌕ Recall
-          </button>
+          <Button variant="ghost" tone="cyan" size="sm" onClick={onOpenRecall} aria-label="Open memory recall search">
+            ⌕<span className="hidden sm:inline"> Recall</span>
+          </Button>
         )}
         {onOpenApprovals && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            tone="amber"
+            size="sm"
             onClick={onOpenApprovals}
-            className="relative rounded border border-line px-2.5 py-1.5 uppercase tracking-wide text-amber transition-all duration-200 hover:scale-105 hover:border-amber hover:shadow-[0_0_10px_-2px_#FFB454] active:scale-95 sm:px-2 sm:py-1"
+            className="relative"
+            aria-label={`Open approvals${pendingApprovals ? `, ${pendingApprovals} pending` : ''}`}
           >
-            ⚑ Approvals
+            ⚑<span className="hidden sm:inline"> Approvals</span>
             {!!pendingApprovals && pendingApprovals > 0 && (
               <span
                 key={pendingApprovals}
@@ -166,7 +160,7 @@ export function HudBar({ sessionId, connected, pendingApprovals, onOpenRecall, o
                 {pendingApprovals}
               </span>
             )}
-          </button>
+          </Button>
         )}
         <LogoutButton />
       </div>

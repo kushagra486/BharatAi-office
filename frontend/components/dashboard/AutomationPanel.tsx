@@ -12,7 +12,7 @@ export interface AutomationPanelProps {
 }
 
 const KIND_COLOR: Record<ActivityFeedEntry['kind'], string> = {
-  output: 'text-[#8B96A5]',
+  output: 'text-ink-muted',
   done: 'text-green',
   failed: 'text-magenta',
 };
@@ -36,8 +36,8 @@ function FeedRow({ entry, agents }: { entry: ActivityFeedEntry; agents: Agent[] 
   const colorClass = isWarning ? 'text-amber' : KIND_COLOR[entry.kind];
   return (
     <li className={`flex items-start gap-2 border-b py-1.5 font-mono text-[11px] last:border-b-0 ${isWarning ? 'border-amber/30 bg-amber/5' : 'border-line/60'}`}>
-      <span className="shrink-0 text-[#6B7686]">{formatRelativeTime(entry.at)}</span>
-      <span className="shrink-0 font-semibold text-[#C7D0DA]">{agentName(agents, entry.agentId)}</span>
+      <span className="shrink-0 text-ink-faint">{formatRelativeTime(entry.at)}</span>
+      <span className="shrink-0 font-semibold text-ink-muted">{agentName(agents, entry.agentId)}</span>
       <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${colorClass}`}>{preview}</span>
     </li>
   );
@@ -47,7 +47,7 @@ function DiffViewer({ diff }: { diff: string }) {
   return (
     <pre className="mt-2 max-h-64 overflow-auto rounded border border-line bg-void p-2 font-mono text-[10px] leading-relaxed">
       {diff.split('\n').map((line, i) => {
-        const color = line.startsWith('+') && !line.startsWith('+++') ? 'text-green' : line.startsWith('-') && !line.startsWith('---') ? 'text-magenta' : 'text-[#8B96A5]';
+        const color = line.startsWith('+') && !line.startsWith('+++') ? 'text-green' : line.startsWith('-') && !line.startsWith('---') ? 'text-magenta' : 'text-ink-muted';
         return (
           <div key={i} className={color}>
             {line || ' '}
@@ -86,8 +86,8 @@ function CompletedTaskRow({ task, agents }: { task: Task; agents: Agent[] }) {
     <li className="border-b border-line/60 py-2 last:border-b-0">
       <button type="button" onClick={toggle} className="flex w-full items-center justify-between gap-2 text-left">
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-mono text-[12px] text-[#C7D0DA]">{task.title}</span>
-          <span className="font-mono text-[10px] text-[#6B7686]">
+          <span className="block truncate font-mono text-[12px] text-ink-muted">{task.title}</span>
+          <span className="font-mono text-[10px] text-ink-faint">
             {agentName(agents, task.agent_id)} · {formatRelativeTime(task.updated_at)}
           </span>
         </span>
@@ -95,9 +95,9 @@ function CompletedTaskRow({ task, agents }: { task: Task; agents: Agent[] }) {
       </button>
       {expanded && (
         <>
-          {loading && <p className="mt-2 font-mono text-[10px] text-[#6B7686]">loading…</p>}
+          {loading && <p className="mt-2 font-mono text-[10px] text-ink-faint">loading…</p>}
           {!loading && diff && <DiffViewer diff={diff} />}
-          {!loading && !diff && <p className="mt-2 font-mono text-[10px] text-[#6B7686]">No diff recorded for this task.</p>}
+          {!loading && !diff && <p className="mt-2 font-mono text-[10px] text-ink-faint">No diff recorded for this task.</p>}
         </>
       )}
     </li>
@@ -118,10 +118,10 @@ export function AutomationPanel({ agents, tasks, activityFeed }: AutomationPanel
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <div className="rounded-xl border border-line bg-panel p-4">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Live activity</p>
+      <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+        <p className="text-[13px] font-semibold text-ink-faint">Live activity</p>
         {activityFeed.length === 0 ? (
-          <p className="mt-2 text-sm text-[#6B7686]">No activity yet — this fills in as agents make tool calls.</p>
+          <p className="mt-2 text-sm text-ink-faint">No activity yet — this fills in as agents make tool calls.</p>
         ) : (
           <ul className="mt-2 max-h-72 overflow-y-auto">
             {activityFeed.map((entry) => (
@@ -131,10 +131,10 @@ export function AutomationPanel({ agents, tasks, activityFeed }: AutomationPanel
         )}
       </div>
 
-      <div className="rounded-xl border border-line bg-panel p-4">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Recent deliveries</p>
+      <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+        <p className="text-[13px] font-semibold text-ink-faint">Recent deliveries</p>
         {recentlyDone.length === 0 ? (
-          <p className="mt-2 text-sm text-[#6B7686]">No completed tasks yet.</p>
+          <p className="mt-2 text-sm text-ink-faint">No completed tasks yet.</p>
         ) : (
           <ul className="mt-2 max-h-72 overflow-y-auto">
             {recentlyDone.map((task) => (

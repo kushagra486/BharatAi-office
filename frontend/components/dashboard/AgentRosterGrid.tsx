@@ -11,8 +11,8 @@ export interface AgentRosterGridProps {
 /** Name, photo, title, job charter, and live provider/model + token usage for every agent — the "who works here" roster. */
 export function AgentRosterGrid({ agents, usage }: AgentRosterGridProps) {
   return (
-    <div className="rounded-xl border border-line bg-panel p-4">
-      <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Working agents</p>
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+      <p className="text-[13px] font-semibold text-ink-faint">Working agents</p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {agents.map((agent) => {
           const agentUsage = usage[agent.id];
@@ -20,12 +20,12 @@ export function AgentRosterGrid({ agents, usage }: AgentRosterGridProps) {
             <div key={agent.id} className="flex items-start gap-3 rounded-lg border border-line/60 p-3">
               <AgentAvatar agent={agent} status="idle" size={40} />
               <div className="min-w-0">
-                <p className="truncate font-mono text-sm font-semibold text-[#E6EDF3]">{agent.name}</p>
-                <p className="truncate text-xs text-[#8B96A5]">{agent.role}</p>
-                <p className="mt-1 text-[11px] leading-snug text-[#6B7686]">{jobDescriptionFor(agent.id)}</p>
+                <p className="truncate font-mono text-sm font-semibold text-ink">{agent.name}</p>
+                <p className="truncate text-xs text-ink-muted">{agent.role}</p>
+                <p className="mt-1 text-[11px] leading-snug text-ink-faint">{jobDescriptionFor(agent.id)}</p>
                 {agentUsage && (
                   <p
-                    className="mt-1 truncate font-mono text-[10px] lowercase text-[#6B7686]"
+                    className="mt-1 truncate font-mono text-[10px] lowercase text-ink-faint"
                     title={`${agentUsage.approxTokens.toLocaleString()} tokens · ${agentUsage.calls} calls`}
                   >
                     {agentUsage.provider}/{agentUsage.model} · ⚡{formatTokenCount(agentUsage.approxTokens)}

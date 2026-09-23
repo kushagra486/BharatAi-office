@@ -27,7 +27,7 @@ function TokenBadge({ tokens }: { tokens: number }) {
   const animated = useAnimatedNumber(tokens);
   if (tokens === 0) return null;
   return (
-    <span className="shrink-0 font-mono text-[10px] tabular-nums text-[#6B7686]" title={`${tokens.toLocaleString()} tokens`}>
+    <span className="shrink-0 font-mono text-[10px] tabular-nums text-ink-faint" title={`${tokens.toLocaleString()} tokens`}>
       ⚡{formatTokenCount(animated)}
     </span>
   );
@@ -37,7 +37,7 @@ function TokenBadge({ tokens }: { tokens: number }) {
 function ModelTag({ provider, model }: { provider: string; model: string }) {
   return (
     <span
-      className="max-w-[110px] shrink truncate font-mono text-[9px] lowercase tracking-tight text-[#6B7686]"
+      className="max-w-[110px] shrink truncate font-mono text-[9px] lowercase tracking-tight text-ink-faint"
       title={`${provider} · ${model}`}
     >
       {provider}/{model}
@@ -65,9 +65,9 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
 
   return (
     <aside className="flex w-full shrink-0 flex-col border-t border-line bg-panel lg:w-64 lg:border-l lg:border-t-0">
-      <div className="border-b border-line px-3 py-2.5">
+      <div className="border-b border-line px-3.5 py-3">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-[#6B7686]">Team ({agents.length})</span>
+          <span className="text-[13px] font-semibold text-ink">Team ({agents.length})</span>
           {workingCount > 0 && (
             <span className="flex items-center gap-1.5 font-mono text-[10px] text-cyan">
               <span className="h-1.5 w-1.5 rounded-full bg-cyan animate-pulse-dot" />
@@ -77,7 +77,7 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
         </div>
         {totalCalls > 0 && (
           <>
-            <div className="mt-1.5 font-mono text-[10px] tabular-nums text-[#6B7686]">
+            <div className="mt-1.5 font-mono text-[10px] tabular-nums text-ink-faint">
               ⚡ {formatTokenCount(animatedTotalTokens)} tokens · {totalCalls} calls
             </div>
             {/* Visible provider/source breakdown — this used to be a hover-only tooltip on the line above, easy to miss entirely. */}
@@ -87,7 +87,7 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
                 .map(([provider, tokens]) => (
                   <span
                     key={provider}
-                    className="flex items-center gap-1 font-mono text-[9px] lowercase tabular-nums text-[#6B7686]"
+                    className="flex items-center gap-1 font-mono text-[9px] lowercase tabular-nums text-ink-faint"
                     title={`${provider}: ${tokens.toLocaleString()} tokens`}
                   >
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: providerColorHex(provider) }} />
@@ -109,24 +109,24 @@ export function TeamRoster({ agents, tasks, usage, selectedAgentId, onSelectAgen
             type="button"
             onClick={() => onSelectAgent(agent.id)}
             style={{ animationDelay: `${index * 35}ms` }}
-            className={`flex w-full origin-left animate-fade-slide-up items-start gap-2.5 border-b border-line/60 px-3 py-2.5 text-left transition-all duration-150 hover:scale-[1.015] hover:bg-line/20 active:scale-[0.99] ${
-              selectedAgentId === agent.id ? 'bg-line/30' : ''
+            className={`flex min-h-11 w-full origin-left animate-fade-slide-up items-start gap-2.5 border-b border-line/60 px-3.5 py-3 text-left transition-all duration-150 hover:scale-[1.015] hover:bg-line/20 active:scale-[0.99] ${
+              selectedAgentId === agent.id ? 'bg-violet/10' : ''
             }`}
           >
             <AgentAvatar agent={agent} status={status} size={30} />
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline justify-between gap-2">
-                <span className="truncate font-mono text-xs font-semibold text-[#E6EDF3]">{agent.name}</span>
-                <span className="shrink-0 font-mono text-[9px] uppercase tracking-wide text-[#6B7686]">
+                <span className="truncate text-[13px] font-semibold text-ink">{agent.name}</span>
+                <span className="shrink-0 font-mono text-[9px] uppercase tracking-wide text-ink-faint">
                   {STATUS_LABEL[status]}
                 </span>
               </span>
               <span className="mt-0.5 flex items-baseline justify-between gap-2">
-                <span className="truncate text-[11px] text-[#8B96A5]">{task ? task.title : agent.role}</span>
+                <span className="truncate text-[12px] text-ink-muted">{task ? task.title : agent.role}</span>
                 <TokenBadge tokens={usage[agent.id]?.approxTokens ?? 0} />
               </span>
               {!task && agent.id !== 'nova' && (
-                <span className="mt-0.5 block truncate text-[10px] italic text-[#6B7686]" title={jobDescriptionFor(agent.id)}>
+                <span className="mt-0.5 block truncate text-[11px] italic text-ink-faint" title={jobDescriptionFor(agent.id)}>
                   Suggestion: {jobDescriptionFor(agent.id)}
                 </span>
               )}

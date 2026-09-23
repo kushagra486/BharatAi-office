@@ -35,8 +35,8 @@ export function AgentMeshGraph({ agents, messages }: AgentMeshGraphProps) {
   });
 
   return (
-    <div className="rounded-xl border border-line bg-panel p-4">
-      <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Mesh graph — who's talking to whom</p>
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+      <p className="text-[13px] font-semibold text-ink-faint">Mesh graph — who's talking to whom</p>
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="mt-2 w-full" role="img" aria-label="Agent communication mesh graph">
         {edges.map((edge) => {
           const from = positions.get(edge.from);

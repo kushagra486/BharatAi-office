@@ -22,8 +22,8 @@ export default function StatusPage() {
 
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-4">
         <div className="flex items-baseline justify-between">
-          <h1 className="font-mono text-sm uppercase tracking-wide text-[#E6EDF3]">Job suggestions &amp; current status</h1>
-          <p className="font-mono text-[11px] text-[#6B7686]">{workingCount} of {agents.length} agents working right now</p>
+          <h1 className="text-lg font-semibold text-ink">Job suggestions &amp; current status</h1>
+          <p className="font-mono text-[11px] text-ink-faint">{workingCount} of {agents.length} agents working right now</p>
         </div>
         <AgentStatusGrid agents={agents} tasks={tasks} escalations={escalations} usage={usage} />
       </div>

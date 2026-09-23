@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import type { BriefRecord } from '@bharat-ai-office/shared';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 
 export interface BriefStripProps {
   brief: BriefRecord | null;
@@ -65,38 +67,38 @@ export function BriefStrip({ brief, onSubmitBrief, onAbandonProject }: BriefStri
 
   if (showComposer) {
     return (
-      <form onSubmit={handleSubmit} className="flex items-center gap-2 border-b border-line bg-panel px-4 py-2.5">
-        {brief?.status === 'complete' && (
-          <span className="shrink-0 font-mono text-[11px] uppercase tracking-wide text-green">✓ Shipped —</span>
-        )}
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Give the office a brief…"
-          className="flex-1 bg-transparent font-mono text-sm text-[#E6EDF3] outline-none placeholder:text-[#6B7686]"
-        />
-        {error && <span className="shrink-0 font-mono text-[11px] text-magenta">{error}</span>}
-        <button
-          type="submit"
-          disabled={submitting || !draft.trim()}
-          className="shrink-0 rounded border border-cyan/50 px-3 py-1 font-mono text-[11px] uppercase tracking-wide text-cyan transition-colors hover:bg-cyan/10 disabled:opacity-40"
-        >
-          {submitting ? 'Sending…' : 'Send to Nova'}
-        </button>
-      </form>
+      <div className="border-b border-line bg-panel px-4 py-3">
+        <form onSubmit={handleSubmit} className="mx-auto flex max-w-3xl items-center gap-2">
+          {brief?.status === 'complete' && <Badge tone="green">✓ Shipped</Badge>}
+          <div className="flex flex-1 items-center gap-2 rounded-full border border-line bg-surface px-4 py-2.5 transition-colors focus-within:border-violet/60 focus-within:ring-2 focus-within:ring-violet/20">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Give the office a brief…"
+              className="flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+            />
+            {error && <span className="shrink-0 text-[11px] text-magenta">{error}</span>}
+          </div>
+          <Button type="submit" variant="primary" tone="violet" disabled={submitting || !draft.trim()}>
+            {submitting ? 'Sending…' : 'Send to Nova'}
+          </Button>
+        </form>
+      </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2.5 font-mono text-xs">
-      <span className="shrink-0 rounded bg-violet/10 px-2 py-0.5 uppercase tracking-wide text-violet">
-        {STATUS_LABEL[brief!.status] ?? brief!.status}
-      </span>
-      <p className="flex-1 truncate text-[#E6EDF3]">{brief!.brief}</p>
-      {brief!.etaMinutes != null && <span className="shrink-0 text-[#6B7686]">ETA ~{brief!.etaMinutes}m</span>}
-      {error && <span className="shrink-0 text-magenta">{error}</span>}
-      <button
-        type="button"
+    <div className="flex items-center gap-3 border-b border-line bg-panel px-4 py-2.5 text-sm">
+      <Badge tone="violet">{STATUS_LABEL[brief!.status] ?? brief!.status}</Badge>
+      <p className="flex-1 truncate text-ink">{brief!.brief}</p>
+      {brief!.etaMinutes != null && (
+        <span className="shrink-0 font-mono text-[11px] text-ink-faint">ETA ~{brief!.etaMinutes}m</span>
+      )}
+      {error && <span className="shrink-0 text-[11px] text-magenta">{error}</span>}
+      <Button
+        variant="ghost"
+        tone={confirmingAbandon ? 'magenta' : 'neutral'}
+        size="sm"
         onClick={handleAbandon}
         disabled={abandoning}
         title={
@@ -104,14 +106,9 @@ export function BriefStrip({ brief, onSubmitBrief, onAbandonProject }: BriefStri
             ? 'Click again to permanently abandon this project'
             : 'Abandon this project and start a new one'
         }
-        className={`shrink-0 rounded border px-3 py-1 uppercase tracking-wide transition-colors disabled:opacity-40 ${
-          confirmingAbandon
-            ? 'border-magenta/60 text-magenta hover:bg-magenta/10'
-            : 'border-line text-[#6B7686] hover:border-magenta/50 hover:text-magenta'
-        }`}
       >
         {abandoning ? 'Abandoning…' : confirmingAbandon ? 'Click to confirm' : 'Abandon project'}
-      </button>
+      </Button>
     </div>
   );
 }

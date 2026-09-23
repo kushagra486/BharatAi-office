@@ -29,28 +29,28 @@ export function MeetingSummaryBoard({ agents, tasks, messages, usage, brief }: M
   const hasAnyActivity = tasks.length > 0 || messages.length > 0;
 
   return (
-    <div className="rounded-xl border border-line bg-panel p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-violet">Office board — meeting summary</p>
-        <span className="rounded border border-line px-2 py-0.5 font-mono text-[11px] tabular-nums text-[#6B7686]">
+        <p className="text-[13px] font-semibold text-violet">Office board — meeting summary</p>
+        <span className="rounded-full border border-line px-2.5 py-0.5 font-mono text-[11px] tabular-nums text-ink-faint">
           {now ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
         </span>
       </div>
 
       {!hasAnyActivity ? (
-        <p className="mt-3 text-sm text-[#8B96A5]">
+        <p className="mt-3 text-sm text-ink-muted">
           No brief submitted yet — give the office something to build on the Office page to see a live summary here.
         </p>
       ) : (
-        <ul className="mt-3 space-y-1.5 text-sm text-[#C7D0DA]">
+        <ul className="mt-3 space-y-1.5 text-sm text-ink-muted">
           <li>
             <span className="text-green">{done} done</span>, <span className="text-cyan">{working} working</span>,{' '}
             <span className="text-magenta">{blocked} blocked</span> across {agents.length} agents.
           </li>
           {brief && (
             <li className="truncate">
-              Current focus: <span className="text-[#E6EDF3]">{brief.brief}</span>{' '}
-              <span className="text-[#6B7686]">
+              Current focus: <span className="text-ink">{brief.brief}</span>{' '}
+              <span className="text-ink-faint">
                 ({brief.status}
                 {brief.etaMinutes != null ? `, ETA ~${brief.etaMinutes}m` : ''})
               </span>
@@ -62,8 +62,8 @@ export function MeetingSummaryBoard({ agents, tasks, messages, usage, brief }: M
             </li>
           )}
           {lastReport && (
-            <li className="truncate text-[#8B96A5]">
-              Latest report from <span className="text-[#C7D0DA]">{lastReport.from_agent}</span>: “{lastReport.body}” (
+            <li className="truncate text-ink-muted">
+              Latest report from <span className="text-ink-muted">{lastReport.from_agent}</span>: “{lastReport.body}” (
               {formatRelativeTime(lastReport.created_at)})
             </li>
           )}

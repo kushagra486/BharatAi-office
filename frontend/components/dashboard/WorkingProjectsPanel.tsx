@@ -19,9 +19,9 @@ const STATUS_LABEL: Record<string, string> = {
 export function WorkingProjectsPanel({ brief, tasks }: WorkingProjectsPanelProps) {
   if (!brief) {
     return (
-      <div className="rounded-xl border border-line bg-panel p-4">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Working projects</p>
-        <p className="mt-2 text-sm text-[#6B7686]">No project in flight. Submit a brief from the Office page to start one.</p>
+      <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+        <p className="text-[13px] font-semibold text-ink-faint">Working projects</p>
+        <p className="mt-2 text-sm text-ink-faint">No project in flight. Submit a brief from the Office page to start one.</p>
       </div>
     );
   }
@@ -31,11 +31,11 @@ export function WorkingProjectsPanel({ brief, tasks }: WorkingProjectsPanelProps
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-line bg-panel p-4">
-      <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Working projects</p>
-      <p className="mt-2 line-clamp-2 text-sm text-[#E6EDF3]">{brief.brief}</p>
-      <div className="mt-3 flex items-center justify-between font-mono text-[11px] text-[#8B96A5]">
-        <span className="rounded border border-line px-2 py-0.5 uppercase tracking-wide text-violet">
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+      <p className="text-[13px] font-semibold text-ink-faint">Working projects</p>
+      <p className="mt-2 line-clamp-2 text-sm text-ink">{brief.brief}</p>
+      <div className="mt-3 flex items-center justify-between font-mono text-[11px] text-ink-muted">
+        <span className="rounded-full border border-line px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-violet">
           {STATUS_LABEL[brief.status] ?? brief.status}
         </span>
         <span>

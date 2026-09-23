@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getAuthStatus, login } from '@/lib/daemonApi';
 import { setToken } from '@/lib/authToken';
+import { Button } from '@/components/ui/Button';
 
 export default function LoginPage() {
   const [password, setPassword] = useState('');
@@ -39,32 +40,30 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-void px-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-2xl border border-line bg-panel p-6">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-2xl border border-line bg-surface p-7 shadow-elevated">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-saffron" />
-          <span className="h-2 w-2 rounded-full bg-[#E6EDF3]" />
+          <span className="h-2 w-2 rounded-full bg-ink" />
           <span className="h-2 w-2 rounded-full bg-india-green" />
-          <span className="ml-1 font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[#E6EDF3]">
-            Bharat AI Office
-          </span>
+          <span className="ml-1 text-sm font-semibold tracking-tight text-ink">Bharat AI Office</span>
         </div>
-        <p className="mt-4 font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Password required</p>
+        <p className="mt-1 text-sm text-ink-muted">Your AI team is waiting — sign in to open the floor.</p>
+        <label htmlFor="login-password" className="sr-only">
+          Password
+        </label>
         <input
+          id="login-password"
           type="password"
           autoFocus
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
-          className="mt-2 w-full rounded-lg border border-line bg-void px-3 py-2 font-mono text-sm text-[#E6EDF3] outline-none focus:border-cyan"
+          className="mt-5 w-full rounded-xl border border-line bg-void px-3.5 py-3 text-sm text-ink outline-none transition-colors focus:border-violet/60 focus:ring-2 focus:ring-violet/20"
         />
         {error && <p className="mt-2 text-xs text-magenta">{error}</p>}
-        <button
-          type="submit"
-          disabled={submitting || !password}
-          className="mt-4 w-full rounded-lg border border-cyan px-3 py-2 font-mono text-xs uppercase tracking-wide text-cyan transition-all duration-200 hover:shadow-[0_0_10px_-2px_#2FE6D2] disabled:cursor-not-allowed disabled:opacity-40"
-        >
+        <Button type="submit" variant="primary" tone="violet" disabled={submitting || !password} className="mt-4 w-full">
           {submitting ? 'Signing in…' : 'Sign in'}
-        </button>
+        </Button>
       </form>
     </main>
   );

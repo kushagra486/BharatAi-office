@@ -18,17 +18,22 @@ const config: Config = {
         green: '#4ADE80',
         saffron: '#FF9933',
         'india-green': '#138808',
+        // --- redesign additions: layered surfaces + promoted text roles ---
+        // (existing void/panel/line above are untouched — these are new,
+        // one step up in elevation, for the Card primitive and its hover state)
+        surface: '#0A0F16',
+        'surface-2': '#121A24',
+        ink: '#E6EDF3',
+        'ink-muted': '#8B96A5',
+        'ink-faint': '#6B7686',
       },
       fontFamily: {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
-        sans: [
-          'ui-sans-serif',
-          'system-ui',
-          '-apple-system',
-          'Segoe UI',
-          'Roboto',
-          'sans-serif',
-        ],
+        sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      boxShadow: {
+        elevated: '0 8px 30px -12px rgba(0,0,0,0.5)',
+        'glow-violet': '0 0 10px -2px #8B7CF6',
       },
       keyframes: {
         'idle-bob': {

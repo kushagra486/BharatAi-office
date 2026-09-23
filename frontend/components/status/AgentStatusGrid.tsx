@@ -31,12 +31,12 @@ export function AgentStatusGrid({ agents, tasks, escalations, usage }: AgentStat
         const agentUsage = usage[agent.id];
 
         return (
-          <div key={agent.id} className="rounded-xl border border-line bg-panel p-4">
+          <div key={agent.id} className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
             <div className="flex items-center gap-3">
               <AgentAvatar agent={agent} status={status} size={44} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate font-mono text-sm font-semibold text-[#E6EDF3]">{agent.name}</p>
+                  <p className="truncate text-[14px] font-semibold text-ink">{agent.name}</p>
                   <span
                     className="shrink-0 font-mono text-[10px] uppercase tracking-wide"
                     style={{ color: STATUS_COLOR[status] }}
@@ -44,10 +44,10 @@ export function AgentStatusGrid({ agents, tasks, escalations, usage }: AgentStat
                     {STATUS_LABEL[status]}
                   </span>
                 </div>
-                <p className="truncate text-xs text-[#8B96A5]">{agent.role}</p>
+                <p className="truncate text-xs text-ink-muted">{agent.role}</p>
                 {agentUsage && (
                   <p
-                    className="mt-0.5 truncate font-mono text-[10px] lowercase text-[#6B7686]"
+                    className="mt-0.5 truncate font-mono text-[10px] lowercase text-ink-faint"
                     title={`${agentUsage.approxTokens.toLocaleString()} tokens · ${agentUsage.calls} calls`}
                   >
                     {agentUsage.provider}/{agentUsage.model} · ⚡{formatTokenCount(agentUsage.approxTokens)}
@@ -58,17 +58,17 @@ export function AgentStatusGrid({ agents, tasks, escalations, usage }: AgentStat
 
             <div className="mt-3 border-t border-line/60 pt-3">
               {isNova ? (
-                <p className="text-[12px] leading-snug text-[#8B96A5]">{jobDescriptionFor('nova')}</p>
+                <p className="text-[12px] leading-snug text-ink-muted">{jobDescriptionFor('nova')}</p>
               ) : task ? (
                 <>
-                  <p className="font-mono text-[10px] uppercase tracking-wide text-violet">Current task</p>
-                  <p className="mt-0.5 truncate text-[12px] text-[#C7D0DA]">{task.title}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-violet">Current task</p>
+                  <p className="mt-0.5 truncate text-[12px] text-ink-muted">{task.title}</p>
                   {blockedReason && <p className="mt-1 text-[11px] text-magenta">Blocked: {blockedReason}</p>}
                 </>
               ) : (
                 <>
-                  <p className="font-mono text-[10px] uppercase tracking-wide text-amber">Job suggestion</p>
-                  <p className="mt-0.5 text-[12px] leading-snug text-[#8B96A5]">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-amber">Job suggestion</p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-ink-muted">
                     No active task — typically works on: {jobDescriptionFor(agent.id)}
                   </p>
                 </>

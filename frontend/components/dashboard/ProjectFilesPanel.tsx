@@ -40,8 +40,8 @@ function FileRow({ file }: { file: ProjectFile }) {
   return (
     <li className="flex items-center justify-between gap-2 border-b border-line/60 py-1.5 last:border-b-0">
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-mono text-[12px] text-[#C7D0DA]">{name}</span>
-        <span className="font-mono text-[10px] text-[#6B7686]">
+        <span className="block truncate font-mono text-[12px] text-ink-muted">{name}</span>
+        <span className="font-mono text-[10px] text-ink-faint">
           {agentId} · {formatSize(file.size)} · {formatRelativeTime(file.updatedAt)}
         </span>
       </span>
@@ -66,9 +66,9 @@ function FileRow({ file }: { file: ProjectFile }) {
 export function ProjectFilesPanel({ files }: ProjectFilesPanelProps) {
   if (files.length === 0) {
     return (
-      <div className="rounded-xl border border-line bg-panel p-4">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Files</p>
-        <p className="mt-2 text-sm text-[#6B7686]">
+      <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+        <p className="text-[13px] font-semibold text-ink-faint">Files</p>
+        <p className="mt-2 text-sm text-ink-faint">
           No committed files yet — they appear here as agents finish tasks and commit their work.
         </p>
       </div>
@@ -76,10 +76,10 @@ export function ProjectFilesPanel({ files }: ProjectFilesPanelProps) {
   }
 
   return (
-    <div className="rounded-xl border border-line bg-panel p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Files</p>
-        <span className="font-mono text-[10px] text-[#6B7686]">{files.length}</span>
+        <p className="text-[13px] font-semibold text-ink-faint">Files</p>
+        <span className="font-mono text-[10px] text-ink-faint">{files.length}</span>
       </div>
       <ul className="mt-2 max-h-72 overflow-y-auto">
         {files.map((file) => (

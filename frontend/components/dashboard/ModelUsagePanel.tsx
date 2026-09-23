@@ -46,18 +46,18 @@ export function ModelUsagePanel({ usage }: ModelUsagePanelProps) {
 
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-line bg-panel p-4">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Token usage by model</p>
-        <p className="mt-2 text-sm text-[#6B7686]">No calls recorded yet.</p>
+      <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+        <p className="text-[13px] font-semibold text-ink-faint">Token usage by model</p>
+        <p className="mt-2 text-sm text-ink-faint">No calls recorded yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-line bg-panel p-4">
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
       <div className="flex items-center justify-between">
-        <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">Token usage by model</p>
-        <span className="font-mono text-[10px] text-[#6B7686]">{formatTokenCount(totalTokens)} total</span>
+        <p className="text-[13px] font-semibold text-ink-faint">Token usage by model</p>
+        <span className="font-mono text-[10px] text-ink-faint">{formatTokenCount(totalTokens)} total</span>
       </div>
       <ul className="mt-2 max-h-80 overflow-y-auto">
         {rows.map((row) => {
@@ -67,13 +67,13 @@ export function ModelUsagePanel({ usage }: ModelUsagePanelProps) {
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: providerColorHex(row.provider) }} />
-                  <span className="truncate font-mono text-[11px] text-[#C7D0DA]" title={`${row.provider}/${row.model}`}>
+                  <span className="truncate font-mono text-[11px] text-ink-muted" title={`${row.provider}/${row.model}`}>
                     {row.model}
                   </span>
                 </span>
-                <span className="shrink-0 font-mono text-[11px] tabular-nums text-[#E6EDF3]">{formatTokenCount(row.approxTokens)}</span>
+                <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink">{formatTokenCount(row.approxTokens)}</span>
               </div>
-              <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[9px] text-[#6B7686]">
+              <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[9px] text-ink-faint">
                 <span className="truncate">
                   {row.provider} · used by {row.agentIds.join(', ')} · {row.calls} calls
                 </span>

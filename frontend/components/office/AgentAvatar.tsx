@@ -42,7 +42,7 @@ export function AgentAvatar({ agent, status, size = 32 }: AgentAvatarProps) {
         </span>
       )}
       <span
-        className={`absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-panel ${
+        className={`absolute -bottom-0.5 -right-0.5 rounded-full ring-2 ring-surface ${
           status === 'working' || status === 'blocked' ? 'animate-pulse-dot' : ''
         }`}
         style={{ width: dotSize, height: dotSize, backgroundColor: STATUS_COLOR[status] }}

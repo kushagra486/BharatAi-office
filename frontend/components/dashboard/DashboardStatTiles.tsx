@@ -12,8 +12,8 @@ export interface DashboardStatTilesProps {
 // tabular-nums (that's reserved for columns of aligned numbers).
 function StatTile({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="rounded-xl border border-line bg-panel p-4">
-      <p className="font-mono text-[10px] uppercase tracking-wide text-[#6B7686]">{label}</p>
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-elevated">
+      <p className="text-[13px] font-semibold text-ink-faint">{label}</p>
       <p className="mt-1 text-2xl font-semibold" style={{ color: accent }}>
         {value}
       </p>

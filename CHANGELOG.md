@@ -5,6 +5,25 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- Full visual/UX redesign across every page (Office, Dashboard, Status,
+  Login) — a "Claude/Gemini/ChatGPT hybrid" pass, keeping every existing
+  panel, hook, and data flow untouched and changing presentation only.
+  Added layered surface tokens (`surface`/`surface-2`), promoted text
+  tokens (`ink`/`ink-muted`/`ink-faint`), and an `elevated`/`glow-violet`
+  shadow scale to `tailwind.config.ts`; self-hosted Inter (`next/font/google`)
+  as the primary sans typeface, with mono now reserved for genuinely
+  technical readouts (timestamps, token counts, model/provider tags, the
+  live terminal feed) instead of every label and button. New shared
+  primitives in `frontend/components/ui/` (`Button`, `Card`, `Badge`)
+  replace duplicated ad-hoc className strings with consistent hover/focus/
+  disabled states and 44px-minimum touch targets. Accessibility fixes
+  bundled into the same pass: `aria-label`s on every icon-only button,
+  visible `focus-visible` rings on inputs and controls, and a
+  `prefers-reduced-motion` guard in `globals.css` that nothing previously
+  respected. The brief composer now reads as a chat-style pill input with
+  an inline send button. Out of scope: the Three.js office scene itself
+  (`components/office-3d/**`), which already had its own dedicated visual
+  pass.
 - Speed/brevity pass: capped every LLM call at 4096 output tokens (generous
   enough not to truncate a real file-write tool call, tight enough to bound
   a reasoning model rambling for thousands of tokens before it ever acts —
