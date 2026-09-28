@@ -34,3 +34,11 @@ __pycache__/
 
 # Netlify CLI's local site-link state (not user code)
 .netlify/
+
+# brag video build intermediates (regenerable)
+brag-output/work/frames/
+brag-output/work/stills/
+brag-output/work/assets/
+brag-output/work/node_modules
+brag-output/work/render.log
+brag-output/work/*.wav

@@ -1,0 +1,3 @@
+I gave one brief to an office of 11 AI employees. Nova split it into tasks, the team built it in parallel, and every file landed as a real git commit — while I watched them walk to each other's desks in a live 3D office.
+
+Bharat AI Office → bharat-ai-office-frontend.vercel.app
